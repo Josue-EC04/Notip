@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.env
+*.db
+vault/
+data/
+scratch/
+.DS_Store
+Thumbs.db

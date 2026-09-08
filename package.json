@@ -1,0 +1,35 @@
+{
+  "name": "notip",
+  "version": "1.0.0",
+  "description": "Tu segundo cerebro personal — mascota flotante con IA",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --enable-logging",
+    "shortcut": "node scratch/build_clean_icon.js",
+    "build:icon": "node scratch/build_clean_icon.js"
+  },
+  "keywords": [
+    "electron",
+    "notes",
+    "ai",
+    "productivity"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0",
+    "3d-force-graph": "^1.80.0",
+    "chokidar": "^3.6.0",
+    "dotenv": "^16.4.5",
+    "electron-store": "^8.2.0",
+    "gray-matter": "^4.0.3",
+    "sql.js": "^1.14.2",
+    "vis-data": "^8.0.5",
+    "vis-network": "^10.1.2"
+  },
+  "devDependencies": {
+    "electron": "^32.0.0",
+    "png-to-ico": "^3.0.2"
+  }
+}

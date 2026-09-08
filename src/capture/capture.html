@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'none';" />
+  <title>Notip — Captura & Claude</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="capture.css" />
+</head>
+<body>
+  <div id="panel">
+    <!-- Header with Brand & Actions -->
+    <div id="panel-header">
+      <div class="panel-brand">
+        <div class="brand-avatar">
+          <img src="../assets/icon.png" alt="Notip" width="16" height="16" style="object-fit: contain; display: block;" />
+        </div>
+        <div class="brand-text-group">
+          <span class="brand-title">Notip</span>
+          <span class="brand-badge">Captura & Claude</span>
+        </div>
+      </div>
+
+      <div id="header-actions">
+        <span id="notes-counter" title="Notas guardadas en vault">0 notas</span>
+        <button id="btn-board" title="Abrir Tablero de Tareas (Kanban)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="18" height="18" rx="2"></rect>
+            <line x1="9" y1="3" x2="9" y2="21"></line>
+            <line x1="15" y1="3" x2="15" y2="21"></line>
+          </svg>
+        </button>
+        <button id="btn-brain" title="Abrir El Cerebro — Grafo de ideas (Ctrl+Shift+B)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="6" cy="6" r="3"></circle>
+            <circle cx="18" cy="6" r="3"></circle>
+            <circle cx="6" cy="18" r="3"></circle>
+            <circle cx="18" cy="18" r="3"></circle>
+            <line x1="9" y1="6" x2="15" y2="6"></line>
+            <line x1="6" y1="9" x2="6" y2="15"></line>
+            <line x1="18" y1="9" x2="18" y2="15"></line>
+            <line x1="9" y1="18" x2="15" y2="18"></line>
+          </svg>
+        </button>
+        <button id="btn-canvas" title="Abrir Pizarra de Notas — Canvas (Ctrl+Shift+P)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="18" height="18" rx="2"/>
+            <line x1="3" y1="9" x2="21" y2="9"/>
+            <line x1="9" y1="21" x2="9" y2="9"/>
+          </svg>
+        </button>
+        <button id="btn-vault" title="Abrir carpeta Vault">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+          </svg>
+        </button>
+        <button id="btn-close" title="Cerrar (Esc)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- VIEW 1: CAPTURA RÁPIDA & CHAT CON NOTIP -->
+    <div id="view-capture" class="panel-view">
+      <!-- Input Console -->
+      <div id="input-wrapper">
+        <textarea
+          id="note-input"
+          placeholder="Escribe una tarea, idea o apunte rápido..."
+          rows="3" maxlength="1000" spellcheck="true"
+        ></textarea>
+        <div id="char-counter">0 / 1000</div>
+      </div>
+
+      <!-- Type Category Chips -->
+      <div id="type-hints">
+        <button type="button" class="chip chip-task" title="Forzar categoría: Tarea">
+          <span class="chip-dot"></span>
+          <span>Tarea</span>
+        </button>
+        <button type="button" class="chip chip-idea" title="Forzar categoría: Idea">
+          <span class="chip-dot"></span>
+          <span>Idea</span>
+        </button>
+        <button type="button" class="chip chip-note" title="Forzar categoría: Nota">
+          <span class="chip-dot"></span>
+          <span>Nota</span>
+        </button>
+        <span id="hint-label">Clasificación automática activa</span>
+      </div>
+
+      <!-- Actions -->
+      <div id="actions">
+        <button id="btn-cancel">Cancelar</button>
+        <button id="btn-save" disabled>
+          <span id="btn-save-spinner" class="btn-spinner hidden"></span>
+          <svg id="btn-save-icon" class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="22" y1="2" x2="11" y2="13"></line>
+            <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+          </svg>
+          <span id="btn-save-text">Guardar</span>
+          <span id="btn-save-kbd">Ctrl ↵</span>
+        </button>
+      </div>
+
+      <!-- AI thinking bar (hidden by default) -->
+      <div id="ai-bar" class="hidden">
+        <div class="ai-pulse-dot"></div>
+        <span id="ai-label">Analizando contenido con Claude...</span>
+      </div>
+
+      <!-- DYNAMIC LOWER CONSOLE -->
+      <div id="capture-dynamic-area">
+        <!-- ESTADO A: ZERO STATE (Sugerencias + Actividad Reciente) -->
+        <div id="section-zero-state">
+          <!-- Quick Prompts Bar -->
+          <div class="quick-prompts-row">
+            <span class="micro-header">Sugerencias rápidas</span>
+            <div class="quick-prompts-chips">
+              <button type="button" class="quick-chip" data-insert="Examen de ">
+                <span class="quick-chip-icon">
+                  <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z"></path>
+                    <path d="M6 6h10"></path>
+                    <path d="M6 10h10"></path>
+                  </svg>
+                </span>
+                <span>Examen</span>
+              </button>
+              <button type="button" class="quick-chip" data-insert="Entregar informe de ">
+                <span class="quick-chip-icon">
+                  <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="9 11 12 14 22 4"></polyline>
+                    <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
+                  </svg>
+                </span>
+                <span>Entrega</span>
+              </button>
+              <button type="button" class="quick-chip" data-insert="Idea: ">
+                <span class="quick-chip-icon">
+                  <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M9 18h6"></path>
+                    <path d="M10 22h4"></path>
+                    <path d="M15.09 14c.18-.98.65-1.74 1.41-2.5A4.65 4.65 0 0 0 18 8 6 6 0 0 0 6 8c0 1 .23 2.23 1.5 3.5A4.61 4.61 0 0 1 8.91 14"></path>
+                  </svg>
+                </span>
+                <span>Idea</span>
+              </button>
+              <button type="button" class="quick-chip" data-insert="Comprar ">
+                <span class="quick-chip-icon">
+                  <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="8" cy="21" r="1"></circle>
+                    <circle cx="19" cy="21" r="1"></circle>
+                    <path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"></path>
+                  </svg>
+                </span>
+                <span>Comprar</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Recent Activity Feed -->
+          <div class="recent-feed-row">
+            <div class="recent-feed-header">
+              <span class="micro-header">Actividad reciente</span>
+              <button type="button" id="btn-switch-tasks-link" class="feed-link-btn" title="Abrir Tablero Kanban de Tareas">Abrir Tablero →</button>
+            </div>
+            <div id="recent-items-container" class="recent-items-container">
+              <!-- Rendered via JS -->
+            </div>
+          </div>
+        </div>
+
+        <!-- ESTADO B: CONVERSACIÓN / MINI CHAT CON NOTIP -->
+        <div id="section-chat-stream" class="hidden">
+          <div id="chat-stream-messages">
+            <!-- Messages rendered dynamically -->
+          </div>
+          <div class="chat-stream-footer">
+            <button type="button" id="btn-new-note" class="result-action-btn primary" title="Limpiar y crear otra nota">
+              <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="12" y1="5" x2="12" y2="19"></line>
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+              </svg>
+              <span>Nueva nota</span>
+            </button>
+            <button type="button" id="btn-open-board-action" class="result-action-btn secondary hidden" title="Abrir en Tablero Kanban">
+              <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="3" width="18" height="18" rx="2"></rect>
+                <line x1="9" y1="3" x2="9" y2="21"></line>
+                <line x1="15" y1="3" x2="15" y2="21"></line>
+              </svg>
+              <span>Ver en Tablero</span>
+            </button>
+            <button type="button" id="btn-done-close" class="result-action-btn" title="Cerrar panel">
+              <span>Cerrar</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Global Toast -->
+    <div id="toast" class="hidden">
+      <svg id="toast-svg-success" class="toast-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="20 6 9 17 4 12"></polyline>
+      </svg>
+      <svg id="toast-svg-error" class="toast-svg hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="10"></circle>
+        <line x1="12" y1="8" x2="12" y2="12"></line>
+        <line x1="12" y1="16" x2="12.01" y2="16"></line>
+      </svg>
+      <span id="toast-msg">Guardado correctamente</span>
+    </div>
+  </div>
+
+  <script src="capture.js"></script>
+</body>
+</html>
