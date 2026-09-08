@@ -19,10 +19,12 @@
   "license": "MIT",
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
+    "@supabase/supabase-js": "^2.116.0",
     "3d-force-graph": "^1.80.0",
     "chokidar": "^3.6.0",
     "dotenv": "^16.4.5",
     "electron-store": "^8.2.0",
+    "googleapis": "^178.1.1",
     "gray-matter": "^4.0.3",
     "sql.js": "^1.14.2",
     "vis-data": "^8.0.5",

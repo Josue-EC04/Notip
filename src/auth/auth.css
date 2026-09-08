@@ -1,0 +1,330 @@
+/* auth.css — Pantalla de login de Notip v2 */
+/* Paleta warm linen & cream consistente con el resto de la app */
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+:root {
+  --linen:       #F5F2EB;
+  --cream:       #FBF9F5;
+  --sand:        #EDE8DC;
+  --warm-brown:  #8B7355;
+  --brown-mid:   #6B5840;
+  --dark:        #2C2417;
+  --text-main:   #3D3020;
+  --text-muted:  #9A8870;
+  --accent:      #7C6445;
+  --border:      rgba(139, 115, 85, 0.18);
+  --shadow-sm:   0 2px 8px rgba(60, 40, 20, 0.07);
+  --shadow-md:   0 8px 32px rgba(60, 40, 20, 0.12);
+  --shadow-lg:   0 20px 60px rgba(60, 40, 20, 0.18);
+  --google-bg:   #fff;
+  --google-text: #3C4043;
+  --google-border: rgba(0,0,0,0.12);
+  --titlebar-h:  36px;
+  --radius:      18px;
+  --radius-sm:   10px;
+}
+
+html, body {
+  width:  100%;
+  height: 100%;
+  overflow: hidden;
+  background: var(--linen);
+  font-family: 'Outfit', system-ui, sans-serif;
+  color: var(--text-main);
+  user-select: none;
+}
+
+/* ─── Canvas de fondo animado ──────────────────────────────── */
+#bg-canvas {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  opacity: 0.35;
+  pointer-events: none;
+}
+
+/* ─── Barra de título ──────────────────────────────────────── */
+.titlebar {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  height: var(--titlebar-h);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 12px 0 14px;
+  background: transparent;
+  -webkit-app-region: drag;
+  z-index: 100;
+}
+
+.titlebar-logo {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--warm-brown);
+  letter-spacing: 0.02em;
+}
+
+.titlebar-icon {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+}
+
+.titlebar-controls {
+  -webkit-app-region: no-drag;
+}
+
+.btn-win {
+  width: 26px;
+  height: 22px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 11px;
+  cursor: pointer;
+  border-radius: 5px;
+  transition: background 0.15s, color 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-win:hover {
+  background: rgba(180, 60, 60, 0.12);
+  color: #C0392B;
+}
+
+/* ─── Contenedor principal ─────────────────────────────────── */
+.login-container {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: calc(var(--titlebar-h) + 20px) 24px 24px;
+}
+
+/* ─── Card de login ─────────────────────────────────────────── */
+.login-card {
+  background: rgba(251, 249, 245, 0.88);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lg);
+  padding: 36px 40px 30px;
+  width: 100%;
+  max-width: 400px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  animation: card-in 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes card-in {
+  from { opacity: 0; transform: translateY(24px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* ─── Branding / mascota ───────────────────────────────────── */
+.brand-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.mascot-wrapper {
+  position: relative;
+  width: 80px;
+  height: 80px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mascot-img {
+  width: 72px;
+  height: 72px;
+  object-fit: contain;
+  object-position: top;
+  image-rendering: -webkit-optimize-contrast;
+  animation: mascot-float 3s ease-in-out infinite;
+  position: relative;
+  z-index: 1;
+}
+
+@keyframes mascot-float {
+  0%, 100% { transform: translateY(0px); }
+  50%       { transform: translateY(-5px); }
+}
+
+.mascot-glow {
+  position: absolute;
+  bottom: -4px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 50px;
+  height: 12px;
+  background: radial-gradient(ellipse, rgba(139, 115, 85, 0.22) 0%, transparent 70%);
+  border-radius: 50%;
+  animation: mascot-float 3s ease-in-out infinite;
+}
+
+.brand-title {
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--dark);
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+
+.brand-subtitle {
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--text-muted);
+  text-align: center;
+  line-height: 1.4;
+}
+
+/* ─── Divider ──────────────────────────────────────────────── */
+.divider {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.divider::before,
+.divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+/* ─── Descripción ──────────────────────────────────────────── */
+.login-desc {
+  font-size: 13.5px;
+  color: var(--text-muted);
+  text-align: center;
+  line-height: 1.6;
+  margin-bottom: 22px;
+}
+
+/* ─── Botón Google ─────────────────────────────────────────── */
+.btn-google {
+  width: 100%;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  background: var(--google-bg);
+  color: var(--google-text);
+  border: 1px solid var(--google-border);
+  border-radius: var(--radius-sm);
+  font-family: 'Outfit', sans-serif;
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08), 0 2px 8px rgba(0,0,0,0.06);
+  transition: box-shadow 0.2s, transform 0.15s, background 0.15s;
+  margin-bottom: 16px;
+  letter-spacing: 0.01em;
+}
+
+.btn-google:hover {
+  box-shadow: 0 2px 8px rgba(0,0,0,0.14), 0 4px 16px rgba(0,0,0,0.1);
+  transform: translateY(-1px);
+  background: #F8F8F8;
+}
+
+.btn-google:active {
+  transform: translateY(0);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+
+.btn-google:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* ─── Estado de carga ──────────────────────────────────────── */
+.login-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  background: rgba(139, 115, 85, 0.08);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  color: var(--warm-brown);
+  width: 100%;
+  margin-bottom: 12px;
+}
+
+.spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(139, 115, 85, 0.2);
+  border-top-color: var(--warm-brown);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ─── Error ────────────────────────────────────────────────── */
+.error-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 14px;
+  background: rgba(200, 60, 60, 0.07);
+  border: 1px solid rgba(200, 60, 60, 0.18);
+  border-radius: var(--radius-sm);
+  font-size: 12.5px;
+  color: #A03030;
+  width: 100%;
+  margin-bottom: 12px;
+  line-height: 1.4;
+}
+
+.error-banner svg {
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+/* ─── Footer ───────────────────────────────────────────────── */
+.login-footer {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-align: center;
+  line-height: 1.6;
+  opacity: 0.75;
+}

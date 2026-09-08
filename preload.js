@@ -44,6 +44,24 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getCanvasLayout:       ()                    => ipcRenderer.invoke('get-canvas-layout'),
   saveCanvasLayout:      (layout)              => ipcRenderer.invoke('save-canvas-layout', layout),
 
+  // ─── Auth v2 ─────────────────────────────────────────────────────────────────
+  /** Inicia el flujo OAuth de Google (abre el navegador) */
+  authLogin:     ()                            => ipcRenderer.invoke('auth-login'),
+  /** Cierra la sesión y vuelve a la pantalla de login */
+  authLogout:    ()                            => ipcRenderer.invoke('auth-logout'),
+  /** Devuelve el usuario actual { id, email, name, avatar } o null */
+  getSession:    ()                            => ipcRenderer.invoke('auth-get-session'),
+  /** Cierra la ventana de auth (si el usuario quiere salir desde el login) */
+  closeAuth:     ()                            => ipcRenderer.send('close-auth'),
+
+  // ─── Créditos v2 ──────────────────────────────────────────────────────────────
+  /** Devuelve { saldo, es_admin } o null si no hay sesión */
+  getCredits:    ()                            => ipcRenderer.invoke('get-credits'),
+
+  // ─── Google Calendar v2 ───────────────────────────────────────────────────────
+  /** Crea un evento en el Google Calendar del usuario */
+  addCalendarEvent: (params)                   => ipcRenderer.invoke('add-calendar-event', params),
+
   // Events from main → renderer
   on: (channel, callback) => {
     const allowed = [
@@ -58,6 +76,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
       'set-opacity',
       'set-dock',
       'request-close',
+      // v2
+      'auth-changed',
+      'auth-error',
+      'credits-updated',
     ];
     if (allowed.includes(channel)) {
       ipcRenderer.on(channel, (_e, ...args) => callback(...args));

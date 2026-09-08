@@ -4,8 +4,14 @@ require('dotenv').config();
 
 const {
   app, BrowserWindow, ipcMain, Tray, Menu,
-  screen, nativeImage, shell, globalShortcut,
+  screen, nativeImage, shell, globalShortcut, protocol,
 } = require('electron');
+
+// ─── Protocolo OAuth: registrar notip:// ANTES de app.whenReady() ──────────────
+// Esto permite recibir el callback de Google OAuth sin un servidor web local.
+protocol.registerSchemesAsPrivileged([
+  { scheme: 'notip', privileges: { secure: true, standard: true, supportFetchAPI: true } },
+]);
 const path  = require('path');
 const fs    = require('fs');
 
@@ -22,12 +28,19 @@ const Store = require('electron-store');
 const store = new Store();
 
 // Evitar múltiples instancias simultáneas que causen desincronización
+// También necesario para recibir el callback OAuth notip:// en Windows
 const gotTheLock = app.requestSingleInstanceLock();
 if (!gotTheLock) {
   app.quit();
   process.exit(0);
 } else {
-  app.on('second-instance', () => {
+  app.on('second-instance', (_e, argv) => {
+    // En Windows el deep link llega como argumento de línea de comandos
+    const url = argv.find(arg => arg.startsWith('notip://'));
+    if (url) {
+      handleOAuthCallback(url);
+      return;
+    }
     if (petWindow) {
       if (petWindow.isMinimized()) petWindow.restore();
       petWindow.show();
@@ -36,12 +49,14 @@ if (!gotTheLock) {
   });
 }
 
-let petWindow     = null;
-let captureWindow = null;
-let boardWindow   = null;
-let brainWindow   = null;
-let canvasWindow  = null;
-let tray          = null;
+let petWindow         = null;
+let captureWindow     = null;
+let boardWindow       = null;
+let brainWindow       = null;
+let canvasWindow      = null;
+let authWindow        = null;   // Ventana de login (v2)
+let tray              = null;
+let currentProviderToken = null; // Token de Google para Calendar (se guarda tras login)
 
 // Track whether the user manually hid the pet
 let userHidden         = false;
@@ -59,6 +74,98 @@ function ensureDirs() {
   [vaultPath, dataPath].forEach(p => {
     if (!fs.existsSync(p)) fs.mkdirSync(p, { recursive: true });
   });
+}
+
+// ─── Auth window (login) ────────────────────────────────────────────────
+function createAuthWindow() {
+  if (authWindow && !authWindow.isDestroyed()) {
+    authWindow.show();
+    authWindow.focus();
+    return;
+  }
+
+  authWindow = new BrowserWindow({
+    width:       480,
+    height:      600,
+    icon:        appIconPath,
+    frame:       false,
+    transparent: false,
+    alwaysOnTop: false,
+    skipTaskbar: false,
+    resizable:   false,
+    center:      true,
+    backgroundColor: '#F5F2EB',
+    webPreferences: {
+      preload:          path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration:  false,
+    },
+  });
+
+  authWindow.loadFile(path.join(__dirname, 'src', 'auth', 'auth.html'));
+
+  authWindow.on('close', e => {
+    e.preventDefault();
+    // Si el usuario cierra el login sin autenticarse, salir de la app
+    app.exit(0);
+  });
+}
+
+/**
+ * Procesa la URL de callback OAuth (notip://auth-callback?code=...)
+ * Supabase se encarga de intercambiar el code por tokens de sesión.
+ */
+async function handleOAuthCallback(url) {
+  console.log('[auth] OAuth callback recibido:', url);
+  try {
+    const { getSupabaseClient, storeSession } = require('./src/supabase/client');
+    const sb = getSupabaseClient();
+    if (!sb) return;
+
+    // Supabase extrae el code de la URL y obtiene la sesión
+    const { data, error } = await sb.auth.exchangeCodeForSession(url);
+    if (error) {
+      console.error('[auth] exchangeCodeForSession error:', error.message);
+      authWindow?.webContents.send('auth-error', error.message);
+      return;
+    }
+
+    const session = data?.session;
+    if (!session) {
+      authWindow?.webContents.send('auth-error', 'No se pudo obtener la sesión');
+      return;
+    }
+
+    // Guardar el provider_token (Google OAuth token para Calendar)
+    currentProviderToken = session.provider_token;
+    storeSession(session);
+    store.set('notip-provider-token', session.provider_token || null);
+
+    console.log('[auth] Sesión iniciada para:', session.user?.email);
+
+    // Cerrar auth window y abrir la app principal
+    onLoginSuccess();
+  } catch (err) {
+    console.error('[auth] handleOAuthCallback error:', err);
+    authWindow?.webContents.send('auth-error', err.message);
+  }
+}
+
+/** Cierra la ventana de login y abre la app principal */
+function onLoginSuccess() {
+  if (authWindow && !authWindow.isDestroyed()) {
+    authWindow.removeAllListeners('close');
+    authWindow.destroy();
+    authWindow = null;
+  }
+  // Iniciar la app principal
+  createPetWindow();
+  createCaptureWindow();
+  createBoardWindow();
+  createBrainWindow();
+  createTray();
+  setupGlobalShortcut();
+  setupFullscreenWatcher();
 }
 
 // ─── Pet window ────────────────────────────────────────────────────────────────
@@ -635,6 +742,108 @@ ipcMain.on('close-brain',   () => brainWindow?.hide());
 ipcMain.on('open-canvas',   () => showCanvas());
 ipcMain.on('close-canvas',  () => canvasWindow?.hide());
 
+// ─── Auth IPC (v2) ─────────────────────────────────────────────────────────────
+ipcMain.on('close-auth', () => app.exit(0));
+
+/** Inicia el flujo de login con Google vía Supabase */
+ipcMain.handle('auth-login', async () => {
+  try {
+    const { getSupabaseClient } = require('./src/supabase/client');
+    const sb = getSupabaseClient();
+    if (!sb) return { error: 'Supabase no configurado. Revisa tu .env (SUPABASE_URL y SUPABASE_ANON_KEY).' };
+
+    const { data, error } = await sb.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo:    'notip://auth-callback',
+        scopes:        'openid email profile https://www.googleapis.com/auth/calendar.events',
+        queryParams:   { access_type: 'offline', prompt: 'consent' },
+        skipBrowserRedirect: false,
+      },
+    });
+
+    if (error) return { error: error.message };
+
+    // Abrir la URL de autorización en el navegador del sistema
+    if (data?.url) {
+      shell.openExternal(data.url);
+      return { success: true, pending: true };
+    }
+
+    return { error: 'No se generó la URL de autorización' };
+  } catch (err) {
+    console.error('[auth-login] Error:', err);
+    return { error: err.message };
+  }
+});
+
+/** Cierra la sesión y muestra la pantalla de login */
+ipcMain.handle('auth-logout', async () => {
+  try {
+    const { signOut } = require('./src/supabase/client');
+    await signOut();
+    store.delete('notip-provider-token');
+    currentProviderToken = null;
+
+    // Destruir todas las ventanas de la app
+    petWindow?.destroy(); petWindow = null;
+    captureWindow?.destroy(); captureWindow = null;
+    boardWindow?.destroy(); boardWindow = null;
+    brainWindow?.destroy(); brainWindow = null;
+    canvasWindow?.destroy(); canvasWindow = null;
+    tray?.destroy(); tray = null;
+    globalShortcut.unregisterAll();
+
+    // Mostrar login nuevamente
+    createAuthWindow();
+    return { success: true };
+  } catch (err) {
+    return { error: err.message };
+  }
+});
+
+/** Devuelve el usuario y sesión activos */
+ipcMain.handle('auth-get-session', async () => {
+  try {
+    const { getStoredUser, getStoredSession, getSupabaseClient } = require('./src/supabase/client');
+    const user = getStoredUser();
+    if (!user) return { user: null, session: null };
+    const session = getStoredSession();
+    return {
+      user: { id: user.id, email: user.email, name: user.user_metadata?.full_name, avatar: user.user_metadata?.avatar_url },
+      has_provider_token: !!currentProviderToken,
+    };
+  } catch (err) {
+    return { user: null, error: err.message };
+  }
+});
+
+/** Obtiene el saldo de créditos del usuario */
+ipcMain.handle('get-credits', async () => {
+  try {
+    const { getCredits } = require('./src/sync/syncManager');
+    return await getCredits();
+  } catch (err) {
+    return { error: err.message };
+  }
+});
+
+/** Crea un evento en Google Calendar del usuario */
+ipcMain.handle('add-calendar-event', async (_e, params) => {
+  try {
+    const providerToken = currentProviderToken || store.get('notip-provider-token');
+    if (!providerToken) {
+      return { error: 'No hay token de Google disponible. Vuelve a iniciar sesión.', needs_reauth: true };
+    }
+
+    const { addCalendarEvent } = require('./src/sync/syncManager');
+    const result = await addCalendarEvent({ ...params, provider_token: providerToken });
+    return result;
+  } catch (err) {
+    return { error: err.message };
+  }
+});
+
 ipcMain.on('show-pet-menu', () => {
   const currentOpacity = store.get('petOpacity', 1.0);
   const menu = Menu.buildFromTemplate([
@@ -1054,19 +1263,49 @@ function getErrorMsg(err) {
 // ─── App lifecycle ─────────────────────────────────────────────────────────────
 app.whenReady().then(async () => {
   ensureDirs();
+
+  // Iniciar SQLite local (siempre, funciona offline)
   try {
     const { initDatabase } = require('./src/db/database');
     await initDatabase(dataPath);
   } catch (err) {
     console.error('[main] Error al iniciar SQLite:', err);
   }
-  createPetWindow();
-  createCaptureWindow();
-  createBoardWindow();
-  createBrainWindow();
-  createTray();
-  setupGlobalShortcut();
-  setupFullscreenWatcher();
+
+  // Registrar app como handler del protocolo notip:// en Windows
+  // (necesario para recibir el callback de Google OAuth)
+  if (!app.isDefaultProtocolClient('notip')) {
+    app.setAsDefaultProtocolClient('notip');
+  }
+
+  // Verificar si hay una sesión activa de Supabase
+  const { getStoredUser } = require('./src/supabase/client');
+  const user = getStoredUser();
+
+  if (user) {
+    // ✅ Sesión válida → abrir app directamente
+    console.log('[main] Sesión activa para:', user.email);
+    // Restaurar provider token de Calendar si existe
+    currentProviderToken = store.get('notip-provider-token') || null;
+    createPetWindow();
+    createCaptureWindow();
+    createBoardWindow();
+    createBrainWindow();
+    createTray();
+    setupGlobalShortcut();
+    setupFullscreenWatcher();
+  } else {
+    // 🔐 Sin sesión → mostrar pantalla de login
+    console.log('[main] Sin sesión — mostrando login');
+    createAuthWindow();
+  }
+});
+
+// macOS: manejar deep link cuando la app ya está abierta
+app.on('open-url', (_e, url) => {
+  if (url.startsWith('notip://')) {
+    handleOAuthCallback(url);
+  }
 });
 
 app.on('window-all-closed', e => e.preventDefault());
@@ -1080,5 +1319,7 @@ app.on('before-quit', () => {
   captureWindow?.destroy();
   boardWindow?.destroy();
   brainWindow?.destroy();
+  authWindow?.destroy();
   try { require('./src/db/database').closeDatabase(); } catch { /* ignore */ }
 });
+
