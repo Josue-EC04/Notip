@@ -28,6 +28,10 @@ function getSupabaseClient() {
     return null;
   }
 
+  // En Electron, el proceso principal no tiene WebSocket nativo aunque Node sea v22+.
+  // Usamos el paquete 'ws' como transporte explícito para Supabase.
+  const WebSocket = require('ws');
+
   _supabase = createClient(url, key, {
     auth: {
       // Adaptador de almacenamiento basado en electron-store
@@ -41,7 +45,16 @@ function getSupabaseClient() {
       persistSession:   true,
       detectSessionInUrl: false,
     },
+    realtime: {
+      // Proveer WebSocket explícitamente (requerido en Electron main process)
+      transport: WebSocket,
+      params: { eventsPerSecond: 2 },
+    },
+    global: {
+      headers: { 'X-Client-Info': 'notip-electron/2.0' },
+    },
   });
+
 
   return _supabase;
 }
