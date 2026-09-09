@@ -23,20 +23,21 @@ El JSON debe tener esta forma exacta:
 }
 
 Reglas de clasificación:
+- "titulo_corto": OBLIGATORIO. TÍTULO SINTETIZADO, LIMPIO Y PROFESIONAL (máximo 5 palabras), ideal para eventos de Google Calendar y títulos de notas. NUNCA copies frases incompletas ni recortes palabras al azar (ejemplo: NO pongas "Tengo una reunion mañana a las", pon "Reunión de Redes"; NO pongas "este jueves inicia una pequeña hackaton", pon "Hackatón"). Elimina muletillas como "tengo que", "inicia una", "a las 6pm", "mañana".
+- "tipo": Si el texto menciona un evento, reunión, hackatón, clase, examen, entrega, to-do o tiene fecha/hora, SIEMPRE clasifícalo como "tarea" para habilitar su sincronización con Google Calendar. "idea" si es un concepto creativo o de negocio. "nota" sólo para información estática sin acciones.
 - "es_modificacion_de_anterior": Si se proporciona contexto de una nota/tarea previa: pon true SOLO si el usuario está pidiendo modificar, corregir, actualizar o hacer preguntas sobre esa nota previa (ej. "cámbialo a las 4pm", "ponle que es urgente", "agrega que lleve el cargador"). Si el usuario está escribiendo una nota o tarea NUEVA e independiente sobre otro tema, pon false. Si no hay contexto previo, pon false.
-- IDENTIDAD DE NOTIP: Si el usuario te habla en segunda persona diciendo cosas como "agregarte una mejora", "conectarte con Google Calendar", "ayúdame a recordar", se está dirigiendo a TI (Notip). En el título corto y en el texto reescrito deja claro que es para Notip (ejemplo: "Integrar Google Calendar en Notip" o "Mejora para Notip: sincronización de eventos"), NUNCA digas "otra aplicación de notas" ni hables como si fueras un tercero ajeno.
-- "tipo": "tarea" si es cualquier acción a realizar, to-do, entrega, arreglo o actividad pendiente concreta (verbos como "mejorar", "hacer", "arreglar", "estudiar", "entregar"). "idea" si es un concepto creativo de negocio o proyecto. "nota" si es un apunte o información estática.
-- "descripcion": Si el texto incluye detalles específicos, contexto, especificaciones técnicas, descansos, lugares o aclaraciones (ej. "en la hora de descanso a las 11 am", "reunión en la sala B"), redacta una descripción breve (1 a 2 oraciones). Si no hay detalles más allá del título, pon null.
-- "hora_entrega": Si menciona una hora específica (ej. "a las 11am", "11:00 am", "3pm", "18:00"), extráela en formato militar 24h "HH:MM" (ej. "11:00", "15:00"). Si no hay hora, pon null.
-- "fecha_entrega": Si menciona fechas relativas ("hoy", "mañana", "el viernes", "este lunes"), calcula la fecha en formato YYYY-MM-DD respecto a la fecha actual de referencia. Si no hay fecha, pon null.
+- "IDENTIDAD DE NOTIP": Si el usuario te habla en segunda persona diciendo cosas como "agregarte una mejora", "conectarte con Google Calendar", "ayúdame a recordar", se está dirigiendo a TI (Notip). En el título corto y en el texto reescrito deja claro que es para Notip (ejemplo: "Integrar Google Calendar en Notip"), NUNCA digas "otra aplicación de notas" ni hables como si fueras un tercero ajeno.
+- "descripcion": Si el texto incluye detalles específicos, contexto, especificaciones técnicas, lugares o aclaraciones, redacta una descripción breve (1 a 2 oraciones). Si no hay detalles más allá del título, pon null.
+- "hora_entrega": Si menciona una hora específica (ej. "a las 6 pm", "8pm", "11am", "11:00 am", "18:00"), extráela en formato militar 24h "HH:MM" (ej. "18:00", "20:00"). Si no hay hora, pon null.
+- "fecha_entrega": Si menciona fechas relativas ("hoy", "mañana", "este jueves", "el viernes", "este lunes"), calcula la fecha en formato YYYY-MM-DD respecto a la fecha actual de referencia. Si no hay fecha, pon null.
 - "prioridad": Si es una "tarea", evalúa la urgencia:
   * "alta": si contiene palabras como "urgente", "ya", "hoy", "examen mañana", "crítico", "prioridad alta", o fecha límite en las próximas 24 horas.
   * "media": si tiene fecha límite próxima en esta semana, entregas importantes o reuniones clave.
   * "normal": tareas habituales, compras cotidianas, lecturas o pendientes sin urgencia inmediata. (Para "idea" o "nota" devuelve "normal").
-- "curso": Si es académico pon la materia/curso (ej. "Cálculo", "Física", "Inteligencia Financiera"). Si es de trabajo pon "Trabajo" o el proyecto/empresa. Si es personal pon "Personal" (ej. compras, gym, salud). Si no aplica o no hay contexto pon null.
-- "mensaje_feedback": OBLIGATORIO. Una respuesta breve, cálida, personalizada e inteligente directamente relacionada con lo que el usuario escribió (máximo 1 o 2 oraciones). Debe confirmar lo que se guardó específicamente y añadir un comentario o consejo útil y relevante sobre el tema (ej. "¡Genial! Anoté la integración de Google Calendar en Notip. ¡Será súper útil para tener tus fechas sincronizadas!", o "Anotada tu tarea de Redes para el viernes a las 11:00 am.").
-- "tags": Arreglo de 1 a 4 etiquetas temáticas en minúsculas sin espacios (ej. ["notip", "google-calendar"], ["alexa", "echo-dot"], ["aimly", "startup"]).
-- "conexiones_sugeridas": Si se proporcionan notas existentes del vault y este texto guarda relación DIRECTA Y EVIDENTE con alguna de ellas (ejemplo: notas del mismo ecosistema como "Alexa" con "Echo Dot 5", o del mismo curso/herramienta), incluye aquí los títulos exactos. NO conectes temas no relacionados (por ejemplo, Aimly con Alexa o con Calendar). Si no hay relación evidente, retorna [].
+- "curso": Si es académico pon la materia/curso (ej. "Cálculo", "Física", "Inteligencia Financiera", "Redes"). Si es de trabajo pon "Trabajo". Si es personal pon "Personal". Si no aplica o no hay contexto pon null.
+- "mensaje_feedback": OBLIGATORIO (TIP DE NOTIP). Una respuesta cálida, personalizada, inteligente y con un consejo práctico directo sobre el tema (máximo 2 oraciones). Confirma el evento/fecha/hora y añade una recomendación útil (ej. "¡Hackatón agendada para el jueves a las 6:00 PM! Tip: Define previamente los roles y arquitectura con tu equipo para iniciar con ventaja.", o "¡Reunión sobre Redes agendada para mañana a las 8:00 PM! Tip: Ten listos los diagramas y notas previas para aprovechar al máximo la sesión.").
+- "tags": Arreglo de 1 a 4 etiquetas temáticas en minúsculas sin espacios (ej. ["redes", "reunion"], ["hackaton", "programacion"]).
+- "conexiones_sugeridas": Si se proporcionan notas existentes del vault y este texto guarda relación DIRECTA Y EVIDENTE con alguna de ellas, incluye aquí los títulos exactos. Si no hay relación evidente, retorna [].
 - Reescribe el texto de forma clara y concisa, corrigiendo gramática, pero sin inventar información que no esté en el texto original.`;
 
 /**
@@ -49,12 +50,19 @@ Reglas de clasificación:
  * @param {Array}  [notasExistentes]- Títulos y tipos de notas existentes en el vault
  * @returns {Promise<object>}
  */
+function toLocalDateString(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 async function clasificarNota(texto, apiKey, forcedType = null, contextoPrevio = null, notasExistentes = []) {
   const Anthropic = require('@anthropic-ai/sdk');
   const client = new Anthropic.default({ apiKey });
 
   const now = new Date();
-  const hoyStr = now.toISOString().split('T')[0];
+  const hoyStr = toLocalDateString(now);
   const diasSemana = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
   const diaSemana = diasSemana[now.getDay()];
   const fechaReferencia = `[FECHA ACTUAL DE REFERENCIA: ${hoyStr} (${diaSemana})]`;
@@ -96,7 +104,7 @@ INSTRUCCIONES CLAVE:
   }
 
   const response = await client.messages.create({
-    model:      'claude-haiku-4-5-20251001',
+    model:      'claude-3-5-haiku-20241022',
     max_tokens: 600,
     system:     SYSTEM_PROMPT,
     messages:   [{ role: 'user', content: userPrompt }],
@@ -233,7 +241,7 @@ Responde ÚNICAMENTE con un JSON con esta estructura exacta:
 Si no hay notas con relación directa, retorna { "conexiones": [] }.`;
 
   const response = await client.messages.create({
-    model: 'claude-haiku-4-5-20251001',
+    model: 'claude-3-5-haiku-20241022',
     max_tokens: 800,
     messages: [{ role: 'user', content: prompt }],
   });
@@ -258,86 +266,136 @@ function tieneApiKey(key) {
 }
 
 /**
- * Clasificador local inteligente por reglas/heurística.
- * Se activa como respaldo si la API de Claude no responde, hay error de autenticación (401),
- * no hay conexión o no hay API key configurada.
+ * Clasificador local inteligente por reglas y análisis de lenguaje natural.
+ * Se activa de inmediato si la API de Claude no responde o no tiene saldo/clave activa.
  */
 function localFallbackClassifier(texto, forcedType = null, contextoPrevio = null) {
   const lower = texto.toLowerCase();
-  
-  // 1. Detectar tipo
-  let tipo = forcedType || contextoPrevio?.tipo || 'nota';
-  if (!forcedType) {
-    if (
-      lower.includes('clase') || lower.includes('examen') || lower.includes('tarea') ||
-      lower.includes('hacer') || lower.includes('comprar') || lower.includes('entregar') ||
-      lower.includes('reunión') || lower.includes('reunion') || lower.includes('mañana') ||
-      lower.includes('hoy') || lower.includes('tengo') || lower.includes('recordar') ||
-      lower.includes('estudiar')
-    ) {
-      tipo = 'tarea';
-    } else if (lower.includes('idea') || lower.includes('proyecto') || lower.includes('crear') || lower.includes('app')) {
-      tipo = 'idea';
-    }
-  }
-
-  // 2. Extraer fecha relativa
-  let fecha_entrega = contextoPrevio?.fecha_entrega || null;
   const now = new Date();
-  if (lower.includes('mañana') || lower.includes('manana')) {
-    const d = new Date(now);
-    d.setDate(d.getDate() + 1);
-    fecha_entrega = d.toISOString().split('T')[0];
-  } else if (lower.includes('hoy')) {
-    fecha_entrega = now.toISOString().split('T')[0];
-  } else if (lower.includes('pasado mañana') || lower.includes('pasado manana')) {
-    const d = new Date(now);
-    d.setDate(d.getDate() + 2);
-    fecha_entrega = d.toISOString().split('T')[0];
-  } else if (lower.includes('viernes')) {
-    const d = new Date(now);
-    const day = d.getDay();
-    const diff = (5 - day + 7) % 7 || 7;
-    d.setDate(d.getDate() + diff);
-    fecha_entrega = d.toISOString().split('T')[0];
-  } else if (lower.includes('lunes')) {
-    const d = new Date(now);
-    const day = d.getDay();
-    const diff = (1 - day + 7) % 7 || 7;
-    d.setDate(d.getDate() + diff);
-    fecha_entrega = d.toISOString().split('T')[0];
-  }
 
-  // 3. Extraer hora (ej. "a las 11 am", "11:00", "3 pm", "14:30")
+  // 1. Extraer hora (ej. "a las 6 pm", "8pm", "11:00 am", "18:00")
   let hora_entrega = contextoPrevio?.hora_entrega || null;
-  const horaMatch = texto.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i);
+  const horaRegex = /(?:a\s+las\s+|las\s+|desde\s+las\s+)?(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i;
+  const horaMatch = texto.match(horaRegex);
   if (horaMatch && (lower.includes('a las') || lower.includes('las') || lower.includes('am') || lower.includes('pm') || lower.includes(':'))) {
     let h = parseInt(horaMatch[1], 10);
     const m = horaMatch[2] ? horaMatch[2] : '00';
     const ampm = horaMatch[3] ? horaMatch[3].toLowerCase() : null;
     if (ampm === 'pm' && h < 12) h += 12;
     if (ampm === 'am' && h === 12) h = 0;
-    hora_entrega = `${String(h).padStart(2, '0')}:${m}`;
+    if (h >= 0 && h <= 23) {
+      hora_entrega = `${String(h).padStart(2, '0')}:${m}`;
+    }
   }
 
-  // 4. Extraer curso
+  // 2. Extraer fecha relativa (soporta todos los días de la semana)
+  let fecha_entrega = contextoPrevio?.fecha_entrega || null;
+  const diasSemana = {
+    'domingo': 0, 'lunes': 1, 'martes': 2,
+    'miercoles': 3, 'miércoles': 3,
+    'jueves': 4, 'viernes': 5,
+    'sabado': 6, 'sábado': 6
+  };
+
+  if (lower.includes('pasado mañana') || lower.includes('pasado manana')) {
+    const d = new Date(now);
+    d.setDate(d.getDate() + 2);
+    fecha_entrega = toLocalDateString(d);
+  } else if (lower.includes('mañana') || lower.includes('manana')) {
+    const d = new Date(now);
+    d.setDate(d.getDate() + 1);
+    fecha_entrega = toLocalDateString(d);
+  } else if (lower.includes('hoy')) {
+    fecha_entrega = toLocalDateString(now);
+  } else {
+    for (const [diaNombre, diaNum] of Object.entries(diasSemana)) {
+      if (lower.includes(diaNombre)) {
+        const d = new Date(now);
+        const hoyDia = d.getDay();
+        const diff = (diaNum - hoyDia + 7) % 7 || 7;
+        d.setDate(d.getDate() + diff);
+        fecha_entrega = toLocalDateString(d);
+        break;
+      }
+    }
+  }
+
+  // 3. Extraer curso o materia académica
   let curso = contextoPrevio?.curso || null;
   if (lower.includes('inteligencia financiera')) curso = 'Inteligencia Financiera';
-  else if (lower.includes('redes')) curso = 'Redes';
+  else if (lower.includes('redes') || lower.includes('fis-redes')) curso = 'Redes';
   else if (lower.includes('calculo') || lower.includes('cálculo')) curso = 'Cálculo';
   else if (lower.includes('fisica') || lower.includes('física')) curso = 'Física';
   else if (lower.includes('sistemas')) curso = 'Ing. Sistemas';
+  else if (lower.includes('software')) curso = 'Diseño de Software';
+  else if (lower.includes('base de datos') || lower.includes('bd')) curso = 'Base de Datos';
+  else if (lower.includes('optimizacion') || lower.includes('optimización')) curso = 'Optimización';
 
-  // 5. Título corto
-  const palabras = texto.split(/\s+/).slice(0, 6).join(' ');
-  const titulo_corto = palabras.charAt(0).toUpperCase() + palabras.slice(1);
+  // 4. Detectar tipo
+  let tipo = forcedType || contextoPrevio?.tipo || 'nota';
+  if (!forcedType) {
+    if (
+      lower.includes('hackaton') || lower.includes('hackathon') ||
+      lower.includes('reunión') || lower.includes('reunion') ||
+      lower.includes('meet') || lower.includes('zoom') ||
+      lower.includes('clase') || lower.includes('examen') ||
+      lower.includes('tarea') || lower.includes('entrega') ||
+      lower.includes('taller') || lower.includes('inicia') ||
+      lower.includes('hacer') || lower.includes('estudiar') ||
+      Boolean(fecha_entrega) || Boolean(hora_entrega)
+    ) {
+      tipo = 'tarea';
+    } else if (lower.includes('idea') || lower.includes('proyecto') || lower.includes('crear') || lower.includes('app') || lower.includes('startup')) {
+      tipo = 'idea';
+    }
+  }
 
-  // 6. Mensaje de feedback
-  let feedback = `Anotado como ${tipo.toUpperCase()}.`;
-  if (fecha_entrega && hora_entrega) {
-    feedback = `Tarea programada para el ${fecha_entrega} a las ${hora_entrega}. ¡Puedes sincronizarla con tu Google Calendar!`;
+  // 5. Síntesis inteligente del título (limpio y apto para Google Calendar y notas)
+  let titulo_corto = '';
+  if (lower.includes('hackaton') || lower.includes('hackathon')) {
+    titulo_corto = 'Hackatón';
+  } else if (lower.includes('reunion') || lower.includes('reunión')) {
+    titulo_corto = curso ? `Reunión de ${curso}` : 'Reunión de Coordinación';
+  } else if (lower.includes('examen') || lower.includes('parcial')) {
+    titulo_corto = curso ? `Examen de ${curso}` : 'Examen';
+  } else if (lower.includes('entrega') || lower.includes('informe')) {
+    titulo_corto = curso ? `Entrega de ${curso}` : 'Entrega de Informe';
+  } else if (lower.includes('clase')) {
+    titulo_corto = curso ? `Clase de ${curso}` : 'Clase';
+  } else {
+    // Limpieza de muletillas de inicio
+    let limpio = texto
+      .replace(/^(tengo\s+que\s+|tengo\s+una\s+|recordar\s+|inicia\s+una\s+pequeña\s+|inicia\s+|hay\s+)/i, '')
+      .replace(/(?:este\s+)?(lunes|martes|miércoles|miercoles|jueves|viernes|sábado|sabado|domingo|hoy|mañana)/gi, '')
+      .replace(/(?:a\s+las\s+|las\s+)?\d{1,2}(?::\d{2})?\s*(am|pm)?/gi, '')
+      .trim();
+
+    const palabras = limpio.split(/\s+/).filter(Boolean).slice(0, 5).join(' ');
+    if (palabras.length > 2) {
+      titulo_corto = palabras.charAt(0).toUpperCase() + palabras.slice(1);
+    } else {
+      const fallbackPalabras = texto.split(/\s+/).slice(0, 5).join(' ');
+      titulo_corto = fallbackPalabras.charAt(0).toUpperCase() + fallbackPalabras.slice(1);
+    }
+  }
+
+  // 6. Mensaje de feedback enriquecido (TIP DE NOTIP)
+  let feedback = '';
+  const fechaLabel = fecha_entrega ? `el ${fecha_entrega}` : '';
+  const horaLabel = hora_entrega ? ` a las ${hora_entrega}` : '';
+
+  if (lower.includes('hackaton') || lower.includes('hackathon')) {
+    feedback = `¡Hackatón agendada para ${fechaLabel}${horaLabel}! Tip: Coordina previamente los roles de tu equipo y ten preparado el entorno de desarrollo para arrancar con ventaja.`;
+  } else if (lower.includes('reunion') || lower.includes('reunión')) {
+    feedback = `¡Reunión programada para ${fechaLabel}${horaLabel}! Tip: Ten listos los temas principales o dudas clave para que la sesión sea ágil y productiva.`;
+  } else if (lower.includes('examen') || lower.includes('parcial')) {
+    feedback = `¡Examen agendado para ${fechaLabel}${horaLabel}! Tip: Programa sesiones de repaso corto y resuelve ejercicios clave con anticipación.`;
+  } else if (fecha_entrega && hora_entrega) {
+    feedback = `Tarea organizada para ${fechaLabel}${horaLabel}. ¡Puedes sincronizarla directamente con tu Google Calendar!`;
   } else if (fecha_entrega) {
-    feedback = `Tarea programada para el ${fecha_entrega}.`;
+    feedback = `Tarea programada para ${fechaLabel}. Tip: Divide el objetivo en pasos pequeños para completarlo sin prisas.`;
+  } else {
+    feedback = `Anotado en tu segundo cerebro como ${tipo.toUpperCase()}.`;
   }
 
   return {
@@ -348,11 +406,11 @@ function localFallbackClassifier(texto, forcedType = null, contextoPrevio = null
     curso,
     fecha_entrega,
     hora_entrega,
-    prioridad: (lower.includes('urgente') || lower.includes('hoy')) ? 'alta' : 'normal',
+    prioridad: (lower.includes('urgente') || lower.includes('hoy') || lower.includes('examen')) ? 'alta' : 'normal',
     mensaje_feedback: feedback,
     es_modificacion_de_anterior: Boolean(contextoPrevio),
     conexiones_sugeridas: [],
-    tags: [tipo],
+    tags: [tipo, ...(curso ? [curso.toLowerCase().replace(/\s+/g, '-')] : [])],
     error_clasificacion: false,
     usando_fallback_local: true,
   };
