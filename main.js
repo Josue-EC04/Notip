@@ -1076,27 +1076,8 @@ ipcMain.handle('add-calendar-event', async (_e, params) => {
       eventBody.end   = { date: today };
     }
 
-    // Buscar si el usuario tiene un calendario secundario específico para Cursos
-    let targetCalendarId = 'primary';
-    try {
-      const calList = await calendar.calendarList.list();
-      const items = calList?.data?.items || [];
-      const cursosCal = items.find(c => c.summary && c.summary.trim().toLowerCase().includes('curso'));
-      if (cursosCal) {
-        targetCalendarId = cursosCal.id;
-        console.log('[calendar] Usando calendario Cursos encontrado:', cursosCal.summary, targetCalendarId);
-      }
-    } catch (cErr) {
-      console.warn('[calendar] No se pudo listar calendarios secundarios, usando primary:', cErr.message);
-    }
-
-    // Si se inserta en primary porque no tiene calendario Cursos separado, usar color amarillo (colorId: '5')
-    if (targetCalendarId === 'primary') {
-      eventBody.colorId = '5';
-    }
-
     const res = await calendar.events.insert({
-      calendarId: targetCalendarId,
+      calendarId: 'primary',
       requestBody: eventBody,
     });
 
