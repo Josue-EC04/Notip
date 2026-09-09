@@ -571,8 +571,14 @@ function build2DGraph(nodes, edges) {
     }
   });
 
-  // Stabilization done → fit view
+  // Guardar posiciones al arrastrar nodos o estabilizar
+  network.on('dragEnd', () => {
+    saveBrainPositions();
+  });
+
+  // Stabilization done → fit view & save positions
   network.on('stabilizationIterationsDone', () => {
+    saveBrainPositions();
     network.fit({ animation: { duration: 400, easingFunction: 'easeInOutQuad' } });
   });
 }
@@ -832,6 +838,28 @@ function buildNodesAndEdges(notes) {
     noteTermsMap.set(n.filename, extractNoteTerms(n));
   });
 
+// ─── Posiciones de Nodos Guardadas (Persistencia) ───────────────────────────
+function getSavedBrainPositions() {
+  try {
+    const raw = localStorage.getItem('notip_brain_positions');
+    return raw ? JSON.parse(raw) : {};
+  } catch (_) {
+    return {};
+  }
+}
+
+function saveBrainPositions() {
+  if (!network) return;
+  try {
+    const pos = network.getPositions();
+    const existing = getSavedBrainPositions();
+    const merged = { ...existing, ...pos };
+    localStorage.setItem('notip_brain_positions', JSON.stringify(merged));
+  } catch (_) {}
+}
+
+  const savedPositions = getSavedBrainPositions();
+
   notes.forEach(note => {
     const tipo = note.tipo || 'sin_clasificar';
     const colors = TYPE_COLORS[tipo] || TYPE_COLORS.sin_clasificar;
@@ -841,8 +869,9 @@ function buildNodesAndEdges(notes) {
     const totalConns = connections.length + suggestedConns.length;
 
     const size = Math.min(22, Math.max(9, 9 + totalConns * 2.2));
+    const savedPos = savedPositions[note.filename];
 
-    nodes.push({
+    const nodeDef = {
       id: note.filename,
       label: getDisplayTitle(note),
       title: buildTooltip(note),
@@ -868,7 +897,14 @@ function buildNodesAndEdges(notes) {
         vadjust: 6,
       },
       _note: note,
-    });
+    };
+
+    if (savedPos && Number.isFinite(savedPos.x) && Number.isFinite(savedPos.y)) {
+      nodeDef.x = savedPos.x;
+      nodeDef.y = savedPos.y;
+    }
+
+    nodes.push(nodeDef);
 
     connections.forEach(connTitle => {
       const target = findMatchingNode(connTitle, notes, note.filename);
@@ -1532,8 +1568,19 @@ async function deleteNote() {
   if (!confirm(`¿Eliminar "${title}" permanentemente?`)) return;
 
   try {
+    // Guardar posiciones actuales de los nodos para que nada se mueva
+    saveBrainPositions();
+
     await window.electronAPI.deleteNote(selectedNodeId);
     showToast(`"${title}" eliminada`, 'success');
+
+    // Remover la posición de la nota eliminada
+    try {
+      const posMap = getSavedBrainPositions();
+      delete posMap[selectedNodeId];
+      localStorage.setItem('notip_brain_positions', JSON.stringify(posMap));
+    } catch (_) {}
+
     deselectNode();
     await reloadGraph();
   } catch (err) {

@@ -54,8 +54,8 @@
 }
 
 html, body {
-  width: 440px;
-  height: 400px;
+  width: 100%;
+  height: 100%;
   background: transparent;
   overflow: hidden;
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -768,21 +768,21 @@ html, body {
 .claude-response-hub {
   background: #FFFFFF;
   border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 10px 12px;
-  box-shadow: 0 1px 3px rgba(28, 25, 23, 0.04);
+  border-radius: 12px;
+  padding: 12px 14px;
+  box-shadow: 0 2px 8px rgba(28, 25, 23, 0.05);
 }
 
 .claude-hub-header {
   display: flex;
   align-items: center;
-  gap: 7px;
-  margin-bottom: 6px;
+  gap: 8px;
+  margin-bottom: 8px;
 }
 
 .notip-avatar-badge {
-  width: 14px;
-  height: 14px;
+  width: 16px;
+  height: 16px;
   border-radius: 50%;
   background: var(--primary);
   flex-shrink: 0;
@@ -795,22 +795,52 @@ html, body {
 }
 
 .claude-hub-name {
-  font-size: 11px;
-  font-weight: 600;
+  font-size: 11.5px;
+  font-weight: 700;
   color: var(--text);
 }
 
 .claude-hub-sub {
-  font-size: 9.5px;
+  font-size: 10px;
   font-family: var(--font-mono);
-  color: var(--faint);
+  color: var(--muted);
+}
+
+.claude-tip-card {
+  background: #FAF8F4;
+  border: 1px solid #ECE4D8;
+  border-left: 3px solid var(--primary);
+  border-radius: 8px;
+  padding: 9px 12px;
+  margin-bottom: 9px;
+}
+
+.tip-card-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10px;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  color: var(--primary);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  margin-bottom: 5px;
+}
+
+.tip-card-content {
+  font-size: 13px;
+  color: var(--text-dim);
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .claude-hub-feedback {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-dim);
-  line-height: 1.45;
-  margin-bottom: 7px;
+  line-height: 1.5;
+  margin-bottom: 8px;
 }
 
 /* Result Card inside chat */

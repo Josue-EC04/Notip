@@ -11,6 +11,10 @@ let startScreenX = 0, startScreenY = 0;
 let hasMoved = false;
 
 petSprite.addEventListener('pointerdown', e => {
+  if (e.button === 2) {
+    handleContextMenu(e);
+    return;
+  }
   if (e.button !== 0) return; // Only left click
   isDragging = true;
   hasMoved = false;
@@ -24,6 +28,12 @@ petSprite.addEventListener('pointerdown', e => {
   
   try { petSprite.setPointerCapture(e.pointerId); } catch (_) {}
   e.preventDefault();
+});
+
+petSprite.addEventListener('mousedown', e => {
+  if (e.button === 2) {
+    handleContextMenu(e);
+  }
 });
 
 petSprite.addEventListener('pointermove', e => {
@@ -126,10 +136,18 @@ window.addEventListener('mouseleave', () => {
 
 // Menú contextual con clic derecho (opacidad, tablero, cerebro, cerrar sesión, etc.)
 function handleContextMenu(e) {
-  e.preventDefault();
-  e.stopPropagation();
+  if (e) {
+    e.preventDefault();
+    e.stopPropagation();
+  }
   setWindowIgnore(false);
-  window.electronAPI?.showPetContextMenu();
+
+  const cx = (e && typeof e.clientX === 'number') ? Math.round(e.clientX) : 130;
+  const cy = (e && typeof e.clientY === 'number') ? Math.round(e.clientY) : 114;
+  const sx = (e && typeof e.screenX === 'number') ? Math.round(e.screenX) : null;
+  const sy = (e && typeof e.screenY === 'number') ? Math.round(e.screenY) : null;
+
+  window.electronAPI?.showPetContextMenu({ clientX: cx, clientY: cy, screenX: sx, screenY: sy });
 }
 
 petSprite?.addEventListener('contextmenu', handleContextMenu);

@@ -379,7 +379,7 @@ function dockPetToCorner(corner = 'bottom-right') {
 // ─── Capture window ────────────────────────────────────────────────────────────
 function createCaptureWindow() {
   captureWindow = new BrowserWindow({
-    width: 450, height: 470,
+    width: 490, height: 560,
     icon:        appIconPath,
     frame:       false,
     transparent: true,
@@ -556,8 +556,8 @@ function positionCaptureNearPet(targetPx = null, targetPy = null) {
 
   const PW = 260;
   const PH = 170;
-  const CW = 450;
-  const CH = 470;
+  const CW = 490;
+  const CH = 560;
   const wa = screen.getPrimaryDisplay().workArea;
 
   // El sprite del robot (96x96) está centrado en el petWindow de 260x170:
@@ -898,19 +898,12 @@ ipcMain.on('show-pet-menu', (_e, coords) => {
     { label: 'Salir de Notip', click: () => app.exit(0) },
   ]);
 
-  let x = coords?.screenX;
-  let y = coords?.screenY;
-  if (!Number.isFinite(x) || !Number.isFinite(y) || x < -500 || y < -500) {
-    try {
-      const pt = screen.getCursorScreenPoint();
-      x = pt.x;
-      y = pt.y;
-    } catch (_) {}
-  }
-
-  console.log('[main] Desplegando menú contextual en:', { x, y });
-  if (Number.isFinite(x) && x > -500 && y > -500) {
-    menu.popup({ x: Math.round(x), y: Math.round(y) });
+  if (petWindow && !petWindow.isDestroyed()) {
+    petWindow.focus();
+    const cx = (Number.isFinite(coords?.clientX) && coords.clientX >= 0 && coords.clientX <= 260) ? Math.round(coords.clientX) : 130;
+    const cy = (Number.isFinite(coords?.clientY) && coords.clientY >= 0 && coords.clientY <= 170) ? Math.round(coords.clientY) : 114;
+    console.log('[main] Desplegando menú contextual en petWindow client (', cx, cy, ')');
+    menu.popup({ window: petWindow, x: cx, y: cy });
   } else {
     menu.popup();
   }
@@ -1020,34 +1013,50 @@ ipcMain.handle('add-calendar-event', async (_e, params) => {
 
     const { titulo, descripcion, fecha_entrega, hora_entrega } = params;
 
-    let startDateTime = null;
-    let endDateTime = null;
-
-    if (fecha_entrega && hora_entrega) {
-      const horaClean = hora_entrega.includes(':') ? hora_entrega : `${hora_entrega}:00`;
-      const [h, m] = horaClean.split(':').map(Number);
-      const d = new Date(fecha_entrega + 'T00:00:00');
-      d.setHours(isNaN(h) ? 10 : h, isNaN(m) ? 0 : m, 0, 0);
-      const dEnd = new Date(d.getTime() + 60 * 60 * 1000);
-      startDateTime = d.toISOString();
-      endDateTime = dEnd.toISOString();
-    }
+    let timeZone = 'America/Lima';
+    try {
+      timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/Lima';
+    } catch (_) {}
 
     const eventBody = {
       summary: titulo || 'Tarea de Notip',
       description: descripcion || 'Creado automáticamente desde Notip',
     };
 
-    if (startDateTime && endDateTime) {
-      eventBody.start = { dateTime: startDateTime };
-      eventBody.end = { dateTime: endDateTime };
+    if (fecha_entrega && hora_entrega) {
+      const parts = hora_entrega.trim().split(':');
+      let h = parseInt(parts[0], 10);
+      let m = parseInt(parts[1] || '0', 10);
+      if (isNaN(h)) h = 10;
+      if (isNaN(m)) m = 0;
+
+      const hStartStr = String(h).padStart(2, '0');
+      const mStartStr = String(m).padStart(2, '0');
+      const startDateTimeStr = `${fecha_entrega}T${hStartStr}:${mStartStr}:00`;
+
+      // 1 hora de duración por defecto
+      let hEnd = h + 1;
+      let mEnd = m;
+      let endDateStr = fecha_entrega;
+      if (hEnd >= 24) {
+        hEnd = hEnd % 24;
+        const dNext = new Date(fecha_entrega + 'T12:00:00');
+        dNext.setDate(dNext.getDate() + 1);
+        endDateStr = dNext.toISOString().split('T')[0];
+      }
+      const hEndStr = String(hEnd).padStart(2, '0');
+      const mEndStr = String(mEnd).padStart(2, '0');
+      const endDateTimeStr = `${endDateStr}T${hEndStr}:${mEndStr}:00`;
+
+      eventBody.start = { dateTime: startDateTimeStr, timeZone };
+      eventBody.end   = { dateTime: endDateTimeStr,   timeZone };
     } else if (fecha_entrega) {
       eventBody.start = { date: fecha_entrega };
-      eventBody.end = { date: fecha_entrega };
+      eventBody.end   = { date: fecha_entrega };
     } else {
       const today = new Date().toISOString().split('T')[0];
       eventBody.start = { date: today };
-      eventBody.end = { date: today };
+      eventBody.end   = { date: today };
     }
 
     const res = await calendar.events.insert({
