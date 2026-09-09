@@ -896,6 +896,8 @@ ipcMain.on('show-pet-menu', () => {
     },
     { type: 'separator' },
     { label: 'Salir de Notip', click: () => app.exit(0) },
+  ]);
+
   console.log('[main] Desplegando menú contextual de la mascota');
   if (petWindow && !petWindow.isDestroyed()) {
     petWindow.focus();
