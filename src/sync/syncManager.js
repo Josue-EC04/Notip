@@ -111,7 +111,7 @@ async function uploadNote(nota) {
         filename:       nota.filename,
         titulo:         nota.titulo || nota.filename,
         contenido:      nota.content || nota.contenido || '',
-        tipo:           nota.tipo || 'nota',
+        tipo:           ['idea', 'tarea'].includes(nota.tipo) ? nota.tipo : 'nota',
         tags:           nota.tags || [],
         prioridad:      nota.prioridad || 'normal',
         conexiones:     nota.conexiones || [],
