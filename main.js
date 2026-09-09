@@ -835,7 +835,7 @@ ipcMain.on('set-ignore-mouse-events', (event, ignore, options) => {
 });
 
 // Menú contextual con clic derecho sobre la mascota
-ipcMain.on('show-pet-menu', () => {
+ipcMain.on('show-pet-menu', (_e, coords) => {
   const { getStoredUser } = require('./src/supabase/client');
   const user = getStoredUser();
   const userEmail = user?.email || 'Usuario';
@@ -898,12 +898,22 @@ ipcMain.on('show-pet-menu', () => {
     { label: 'Salir de Notip', click: () => app.exit(0) },
   ]);
 
-  const cursorPoint = screen.getCursorScreenPoint();
-  console.log('[main] Desplegando menú contextual en:', cursorPoint);
-  menu.popup({
-    x: cursorPoint.x,
-    y: cursorPoint.y,
-  });
+  let x = coords?.screenX;
+  let y = coords?.screenY;
+  if (!Number.isFinite(x) || !Number.isFinite(y) || x < -500 || y < -500) {
+    try {
+      const pt = screen.getCursorScreenPoint();
+      x = pt.x;
+      y = pt.y;
+    } catch (_) {}
+  }
+
+  console.log('[main] Desplegando menú contextual en:', { x, y });
+  if (Number.isFinite(x) && x > -500 && y > -500) {
+    menu.popup({ x: Math.round(x), y: Math.round(y) });
+  } else {
+    menu.popup();
+  }
 });
 
 // ─── Auth IPC (v2) ─────────────────────────────────────────────────────────────

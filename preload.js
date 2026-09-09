@@ -5,7 +5,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('electronAPI', {
   // Pet
   petClicked:         ()       => ipcRenderer.send('pet-clicked'),
-  showPetContextMenu: ()       => ipcRenderer.send('show-pet-menu'),
+  showPetContextMenu: (coords) => ipcRenderer.send('show-pet-menu', coords),
   movePet:            (dx, dy) => ipcRenderer.send('move-pet', dx, dy),
   startPetDrag:       (x, y)   => ipcRenderer.send('start-pet-drag', x, y),
   petDragMove:        ()       => ipcRenderer.send('pet-drag-move'),

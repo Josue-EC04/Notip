@@ -329,10 +329,8 @@ async function handleSave() {
   };
 
   setSavingState(false);
-  await refreshCounter();
-  await refreshTasks();
-  await loadRecentActivity();
 
+  // 1. Mostrar la respuesta de Notip/Claude INMEDIATAMENTE
   if (result.classified) {
     appendNotipResponse(result);
     showToast(isContinuation ? 'Respuesta de Claude lista' : (result.tipo === 'tarea' ? 'Tarea registrada en la lista' : 'Guardado en notas'));
@@ -357,6 +355,14 @@ async function handleSave() {
       mensaje_feedback: 'Nota guardada en el vault',
     });
     showToast('Nota guardada correctamente');
+  }
+
+  // 2. Refrescar contador y actividad en segundo plano de forma segura
+  try {
+    await refreshCounter();
+    await loadRecentActivity();
+  } catch (err) {
+    console.warn('[capture] Error refreshing counters:', err);
   }
 
   // Mostrar u ocultar botón de "Ver en Tablero" según el tipo

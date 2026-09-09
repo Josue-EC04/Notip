@@ -1220,31 +1220,36 @@ function selectNode(nodeId) {
   connectionsList.innerHTML = '';
   if (connectedNodeIds.length > 0) {
     previewConns.classList.remove('hidden');
+
+    const connHeader = previewConns.querySelector('h4');
+    if (connHeader) {
+      connHeader.innerHTML = `Conexiones <span class="conn-count-badge">${connectedNodeIds.length}</span>`;
+    }
+
     connectedNodeIds.forEach(cId => {
       const cNode = nodesDS ? nodesDS.get(cId) : null;
       const cNote = cNode?._note || allNotes.find(n => n.filename === cId);
       const cTitle = cNote?.titulo || cId.replace(/\.md$/, '');
-      const cTipo = (cNote?.tipo || 'nota').toUpperCase();
+      const rawTipo = (cNote?.tipo || 'nota').toLowerCase();
+      const cTipo = rawTipo.toUpperCase();
 
       const edge = getEdgeBetween(nodeId, cId);
       const reasonText = edge?.description || (edge?.relationTitle ? `Tema: ${edge.relationTitle}` : 'Relación temática');
       const keywordsBadges = (edge?.keywords && edge.keywords.length)
-        ? edge.keywords.map(kw => `<span class="conn-kw">${escapeHtml(kw)}</span>`).join('')
+        ? edge.keywords.slice(0, 2).map(kw => `<span class="conn-kw">${escapeHtml(kw)}</span>`).join('')
         : '';
 
       const li = document.createElement('li');
       li.className = 'conn-item';
       li.innerHTML = `
-        <div class="conn-main">
-          <span class="conn-tag">[${cTipo}]</span>
+        <div class="conn-header-row">
+          <span class="conn-tag tag-${rawTipo}">[${cTipo}]</span>
           <span class="conn-name" title="${escapeHtml(cTitle)}">${escapeHtml(cTitle)}</span>
+          ${keywordsBadges ? `<span class="conn-kw-compact">${keywordsBadges}</span>` : ''}
         </div>
-        <div class="conn-explanation">
-          <div class="conn-reason-row">
-            <span class="conn-icon">✦</span>
-            <span class="conn-reason">${escapeHtml(reasonText)}</span>
-          </div>
-          ${keywordsBadges ? `<div class="conn-kw-wrap">${keywordsBadges}</div>` : ''}
+        <div class="conn-reason-compact" title="${escapeHtml(reasonText)}">
+          <span class="conn-icon">✦</span>
+          <span class="conn-reason-text">${escapeHtml(reasonText)}</span>
         </div>
       `;
       li.addEventListener('click', () => {
