@@ -24,6 +24,12 @@ const toastSvgError     = document.getElementById('toast-svg-error');
 const aiBar             = document.getElementById('ai-bar');
 const hintLabel         = document.getElementById('hint-label');
 
+// Active note banner & controls
+const activeNoteBanner   = document.getElementById('active-note-banner');
+const activeNoteTitle    = document.getElementById('active-note-title');
+const btnBannerNewNote   = document.getElementById('btn-banner-new-note');
+const btnActionNewNote   = document.getElementById('btn-action-new-note');
+
 // Dynamic Lower Console Elements
 const sectionZeroState        = document.getElementById('section-zero-state');
 const sectionChatStream       = document.getElementById('section-chat-stream');
@@ -132,12 +138,39 @@ async function loadRecentActivity() {
   }
 }
 
+function updateActiveNoteUI(context) {
+  if (context && (context.titulo || context.titulo_corto)) {
+    const tit = context.titulo_corto || context.titulo;
+    if (activeNoteTitle) activeNoteTitle.textContent = tit;
+    activeNoteBanner?.classList.remove('hidden');
+    btnActionNewNote?.classList.remove('hidden');
+    btnSaveText.textContent = 'Enviar al chat';
+    input.placeholder = `Modificando "${tit}"... (o pulsa "+ Nueva nota" / Ctrl+N)`;
+    hintLabel.textContent = 'Modificando nota previa';
+    if (btnOpenBoardAction && context.tipo === 'tarea') {
+      btnOpenBoardAction.classList.remove('hidden');
+    }
+  } else {
+    activeNoteBanner?.classList.add('hidden');
+    btnActionNewNote?.classList.add('hidden');
+    btnSaveText.textContent = 'Guardar';
+    input.placeholder = 'Escribe una tarea, idea o apunte rápido...';
+    hintLabel.textContent = 'Clasificación automática activa';
+    if (btnOpenBoardAction) {
+      btnOpenBoardAction.classList.add('hidden');
+    }
+  }
+}
+
 function restoreActiveChat() {
   try {
     const raw = localStorage.getItem('notip_active_chat');
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (parsed.activeNoteContext) {
+      const now = Date.now();
+      const isExpired = !parsed.timestamp || (now - parsed.timestamp > 90 * 1000); // 90 segundos de inactividad
+
+      if (parsed.activeNoteContext && !isExpired) {
         activeNoteContext = parsed.activeNoteContext;
         sectionZeroState?.classList.add('hidden');
         sectionChatStream?.classList.remove('hidden');
@@ -154,12 +187,11 @@ function restoreActiveChat() {
           appendNotipResponse(parsed.lastResult, false);
         }
 
-        btnSaveText.textContent = 'Enviar al chat';
-        input.placeholder = '¿Deseas agregar más detalles o cambiar algo?';
-        hintLabel.textContent = 'En conversación con Notip';
-        if (btnOpenBoardAction && parsed.activeNoteContext.tipo === 'tarea') {
-          btnOpenBoardAction.classList.remove('hidden');
-        }
+        updateActiveNoteUI(activeNoteContext);
+      } else if (isExpired) {
+        // Expirado por inactividad → iniciar de cero automáticamente
+        localStorage.removeItem('notip_active_chat');
+        activeNoteContext = null;
       }
     }
 
@@ -260,12 +292,26 @@ btnLogout?.addEventListener('click', async () => {
 if (btnNewNote) {
   btnNewNote.addEventListener('click', resetToNewNote);
 }
+if (btnBannerNewNote) {
+  btnBannerNewNote.addEventListener('click', resetToNewNote);
+}
+if (btnActionNewNote) {
+  btnActionNewNote.addEventListener('click', resetToNewNote);
+}
 if (btnOpenBoardAction) {
   btnOpenBoardAction.addEventListener('click', () => window.electronAPI.openBoard());
 }
 if (btnDoneClose) {
   btnDoneClose.addEventListener('click', handleClose);
 }
+
+// Atajo global Ctrl+N / Cmd+N para empezar nueva nota instantáneamente
+window.addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'n') {
+    e.preventDefault();
+    resetToNewNote();
+  }
+});
 
 // ── Save flow (Capture View) ──────────────────────────────────────────────────
 async function handleSave() {
@@ -316,24 +362,36 @@ async function handleSave() {
     return;
   }
 
+  const eraModificacion = Boolean(isContinuation && result.es_modificacion_de_anterior);
+
+  // Si era continuación pero la IA detectó un tema diferente e independiente:
+  if (isContinuation && !result.es_modificacion_de_anterior) {
+    showToast('✨ Notip detectó un tema nuevo e independiente');
+    chatHistory = [];
+  }
+
   // Guardar contexto activo para permitir continuar el chat
   activeNoteContext = {
     tipo:          result.tipo,
-    titulo:        result.titulo,
+    titulo:        result.titulo_corto || result.titulo,
     texto:         result.texto_reescrito || text,
     curso:         result.curso,
     fecha_entrega: result.fecha_entrega,
     hora_entrega:  result.hora_entrega,
-    taskId:        result.taskId ?? activeNoteContext?.taskId ?? null,
-    filePath:      result.filePath ?? activeNoteContext?.filePath ?? null,
+    prioridad:     result.prioridad,
+    taskId:        result.taskId ?? (eraModificacion ? activeNoteContext?.taskId : null),
+    filePath:      result.filePath ?? (eraModificacion ? activeNoteContext?.filePath : null),
+    timestamp:     Date.now(),
   };
 
   setSavingState(false);
+  updateActiveNoteUI(activeNoteContext);
+  saveChatToStorage();
 
   // 1. Mostrar la respuesta de Notip/Claude INMEDIATAMENTE
   if (result.classified) {
     appendNotipResponse(result);
-    showToast(isContinuation ? 'Respuesta de Claude lista' : (result.tipo === 'tarea' ? 'Tarea registrada en la lista' : 'Guardado en notas'));
+    showToast(isContinuation ? (eraModificacion ? 'Nota actualizada' : 'Nueva nota creada') : (result.tipo === 'tarea' ? 'Tarea registrada en la lista' : 'Guardado en notas'));
   } else if (result.sinApiKey) {
     appendNotipResponse({
       tipo: 'sin_clasificar',
@@ -376,9 +434,6 @@ async function handleSave() {
 
   // Preparar input para continuar la conversación o escribir más
   btnSave.disabled = true;
-  btnSaveText.textContent = 'Enviar al chat';
-  input.placeholder = '¿Deseas agregar más detalles o cambiar algo?';
-  hintLabel.textContent = 'En conversación con Claude';
   isSaving = false;
   setTimeout(() => input.focus(), 50);
 }
@@ -390,14 +445,13 @@ function resetToNewNote() {
     localStorage.removeItem('notip_active_chat');
     localStorage.removeItem('notip_input_draft');
   } catch {}
+  updateActiveNoteUI(null);
   hideResult();
   input.value = '';
   charCounter.textContent = '0 / 1000';
-  input.placeholder = 'Escribe una tarea, idea o apunte rápido...';
-  btnSaveText.textContent = 'Guardar';
   btnSave.disabled = true;
   if (btnOpenBoardAction) btnOpenBoardAction.classList.add('hidden');
-  hintLabel.textContent = 'Clasificación automática activa';
+  showToast('✨ Listo para crear una nueva nota');
   setTimeout(() => input.focus(), 40);
 }
 
@@ -476,6 +530,7 @@ function saveChatToStorage() {
     localStorage.setItem('notip_active_chat', JSON.stringify({
       activeNoteContext,
       messages: chatHistory,
+      timestamp: Date.now(),
     }));
   } catch {}
 }
@@ -704,6 +759,15 @@ async function refreshCounter() {
 window.electronAPI.on('focus-input', () => {
   hideToast();
   hideAiBar();
+
+  // Si han pasado más de 90 segundos desde la última nota o si no hay conversación activa reciente,
+  // reiniciar a nota nueva para que nunca capture encima de una nota anterior por error
+  if (activeNoteContext) {
+    const elapsed = Date.now() - (activeNoteContext.timestamp || 0);
+    if (elapsed > 90 * 1000) {
+      resetToNewNote();
+    }
+  }
 
   const panel = document.getElementById('panel');
   if (panel) {

@@ -79,14 +79,19 @@ El usuario ahora escribe en el mismo chat:
 "${texto}"
 
 INSTRUCCIONES CLAVE:
-1. Si el usuario pide cambiar, modificar o corregir algo (ej. "cámbialo para el viernes", "cambia de lugar para el parque y no en la universidad", "ponle que es de Matemáticas"):
+1. DETECCIÓN CRÍTICA DE TEMA NUEVO VS MODIFICACIÓN:
+   - Si el nuevo texto parece una tarea, apunte, idea, evento o tema DISTINTO e independiente al previo (ejemplo: la nota previa era sobre "Reunión de Redes" y el usuario ahora escribe "Examen de Cálculo el lunes", "Comprar café", "Idea: aplicación móvil", "Hackatón el jueves"):
+     DEBES poner "es_modificacion_de_anterior": false.
+     Clasifica el nuevo texto de forma 100% independiente, con su propio tipo, título sintético y tip.
+   - Pon "es_modificacion_de_anterior": true ÚNICAMENTE si el usuario se refiere directamente a la nota previa o busca modificarla/ampliarla/preguntar por ella (ej: "cámbialo para el viernes", "ponle urgente", "cambia la hora a las 4pm", "agrega que lleve la laptop", "qué comando uso?").
+2. Si "es_modificacion_de_anterior" es true:
    - Actualiza "texto_reescrito" reflejando el nuevo lugar, tema o requerimiento.
    - Si cambia fecha (ej. "para el viernes"), calcula la nueva "fecha_entrega" en formato YYYY-MM-DD respecto a hoy (${hoyStr}).
    - Actualiza "titulo_corto" si es necesario.
    - En "mensaje_feedback", confirma con claridad, calidez y precisión el cambio realizado.
-2. Si el usuario hace una pregunta o pide tips/comandos técnicos:
-   - Responde de forma muy útil y didáctica en "mensaje_feedback" manteniendo los datos previos en el resto de campos.
-3. Si el usuario añade más requerimientos:
+3. Si el usuario hace una pregunta o pide tips/comandos técnicos sobre la nota previa:
+   - Mantén "es_modificacion_de_anterior": true y responde didácticamente en "mensaje_feedback".
+4. Si el usuario añade más requerimientos a la nota previa:
    - Enriquecer "texto_reescrito" combinando lo anterior con lo nuevo.`;
   } else if (forcedType && ['tarea', 'idea', 'nota'].includes(forcedType)) {
     userPrompt = `${fechaReferencia}\n[IMPORTANTE: Clasifica esta entrada obligatoriamente como tipo "${forcedType}"]\n\nTexto:\n${texto}`;
@@ -398,6 +403,14 @@ function localFallbackClassifier(texto, forcedType = null, contextoPrevio = null
     feedback = `Anotado en tu segundo cerebro como ${tipo.toUpperCase()}.`;
   }
 
+  // Detección si es continuación o un tema nuevo
+  let esModificacion = false;
+  if (contextoPrevio) {
+    const esComandoModificar = /^(cambia|modifica|corrige|ponle|agrega|pasa|mueve|a\s+las|para\s+el|para\s+la)/i.test(texto);
+    const esNuevoTema = /^(examen|parcial|tarea|entrega|informe|clase|reunion|reunión|hackaton|hackathon|comprar|idea|proyecto|recordar)\b/i.test(texto);
+    esModificacion = esComandoModificar || !esNuevoTema;
+  }
+
   return {
     tipo,
     texto_reescrito: texto,
@@ -408,7 +421,7 @@ function localFallbackClassifier(texto, forcedType = null, contextoPrevio = null
     hora_entrega,
     prioridad: (lower.includes('urgente') || lower.includes('hoy') || lower.includes('examen')) ? 'alta' : 'normal',
     mensaje_feedback: feedback,
-    es_modificacion_de_anterior: Boolean(contextoPrevio),
+    es_modificacion_de_anterior: esModificacion,
     conexiones_sugeridas: [],
     tags: [tipo, ...(curso ? [curso.toLowerCase().replace(/\s+/g, '-')] : [])],
     error_clasificacion: false,

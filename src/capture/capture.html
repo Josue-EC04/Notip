@@ -75,6 +75,24 @@
 
     <!-- VIEW 1: CAPTURA RÁPIDA & CHAT CON NOTIP -->
     <div id="view-capture" class="panel-view">
+      <!-- Banner indicador cuando se está editando/continuando una nota activa -->
+      <div id="active-note-banner" class="active-note-banner hidden">
+        <div class="active-note-info">
+          <span class="active-note-pill">
+            <span class="active-note-pulse"></span>
+            <span class="active-note-mode">Editando</span>
+          </span>
+          <span id="active-note-title" class="active-note-title">Título de la nota</span>
+        </div>
+        <button type="button" id="btn-banner-new-note" class="btn-banner-new" title="Crear una nota nueva en lugar de modificar esta (Ctrl+N)">
+          <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="12" y1="5" x2="12" y2="19"></line>
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+          </svg>
+          <span>Nueva nota</span>
+        </button>
+      </div>
+
       <!-- Input Console -->
       <div id="input-wrapper">
         <textarea
@@ -104,6 +122,14 @@
 
       <!-- Actions -->
       <div id="actions">
+        <button type="button" id="btn-action-new-note" class="btn-secondary-action hidden" title="Crear otra nota separada (Ctrl+N)">
+          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="12" y1="5" x2="12" y2="19"></line>
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+          </svg>
+          <span>Nueva nota</span>
+          <span class="action-kbd">Ctrl N</span>
+        </button>
         <button id="btn-cancel">Cancelar</button>
         <button id="btn-save" disabled>
           <span id="btn-save-spinner" class="btn-spinner hidden"></span>
