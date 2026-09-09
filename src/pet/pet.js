@@ -66,8 +66,7 @@ function onPointerEnd(e) {
   // Restaurar el passthrough según si el cursor se mantiene sobre la mascota o no
   setTimeout(() => {
     if (!isDragging) {
-      const hovered = petSprite.matches(':hover') || 
-        (bubble && !bubble.classList.contains('hidden') && bubble.matches(':hover'));
+      const hovered = petSprite.matches(':hover');
       if (!hovered && !isIgnoringMouse) {
         isIgnoringMouse = true;
         window.electronAPI?.setIgnoreMouseEvents(true, { forward: true });
@@ -97,9 +96,7 @@ function updateMousePassthrough(e) {
   if (e && typeof e.clientX === 'number') {
     const elem = document.elementFromPoint(e.clientX, e.clientY);
     if (elem) {
-      const isOverSprite = petSprite && petSprite.contains(elem);
-      const isOverBubble = bubble && !bubble.classList.contains('hidden') && bubble.contains(elem);
-      isOverInteractive = !!(isOverSprite || isOverBubble);
+      isOverInteractive = !!(petSprite && petSprite.contains(elem));
     }
   }
 
@@ -146,18 +143,6 @@ function handleContextMenu(e) {
 }
 
 petSprite?.addEventListener('contextmenu', handleContextMenu);
-if (bubble) bubble.addEventListener('contextmenu', handleContextMenu);
-
-// Clic en la mascota: gestionado por triggerClick() en onPointerEnd
-// (El doble clic hacia el tablero ha sido desactivado a petición del usuario)
-
-// Clic en la burbuja para cerrarla o alternar mensaje
-if (bubble) {
-  bubble.addEventListener('click', (e) => {
-    e.stopPropagation();
-    hideBubble();
-  });
-}
 
 // ── Mensajes Creativos y Dinámicos ───────────────────────────────────────────
 const CREATIVE_MESSAGES = {

@@ -142,7 +142,7 @@ html, body {
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   z-index: 10;
-  cursor: pointer;
+  pointer-events: none;
   opacity: var(--pet-opacity, 1);
   animation: pop-in 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
   transition: opacity 0.25s ease, left 0.15s ease, right 0.15s ease;
