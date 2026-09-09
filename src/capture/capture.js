@@ -352,12 +352,24 @@ async function openSettings() {
         settingsCreditsBadge.style.color = '#047857';
       } else {
         const saldo = data.credits.saldo ?? 0;
-        settingsCreditsBadge.textContent = `${saldo} créditos restantes`;
-        settingsCreditsBadge.style.background = saldo > 0 ? '#E0F2FE' : '#FEE2E2';
-        settingsCreditsBadge.style.color = saldo > 0 ? '#0369A1' : '#B91C1C';
+        if (saldo > 0) {
+          settingsCreditsBadge.textContent = `${saldo} créditos restantes`;
+          settingsCreditsBadge.style.background = '#E0F2FE';
+          settingsCreditsBadge.style.color = '#0369A1';
+        } else if (data.hasCustomKey || data.hasDefaultKey) {
+          settingsCreditsBadge.textContent = 'IA Activa · Acceso Notip';
+          settingsCreditsBadge.style.background = '#D1FAE5';
+          settingsCreditsBadge.style.color = '#047857';
+        } else {
+          settingsCreditsBadge.textContent = '0 créditos · Modo local';
+          settingsCreditsBadge.style.background = '#FEE2E2';
+          settingsCreditsBadge.style.color = '#B91C1C';
+        }
       }
     } else {
-      settingsCreditsBadge.textContent = 'Admin · Saldo ilimitado';
+      settingsCreditsBadge.textContent = 'IA Activa · Acceso Notip';
+      settingsCreditsBadge.style.background = '#D1FAE5';
+      settingsCreditsBadge.style.color = '#047857';
     }
 
     if (data.hasCustomKey) {
