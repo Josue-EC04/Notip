@@ -21,6 +21,25 @@ app.commandLine.appendSwitch('disable-gpu-shader-disk-cache');
 // Identificador de aplicación para Windows (asegura agrupación e icono correcto en la barra de tareas y accesos directos)
 app.setAppUserModelId('com.notip.app');
 
+// Registrar app como handler del protocolo notip:// en Windows
+// En desarrollo, Windows necesita process.execPath y la ruta del proyecto para no intentar ejecutar la URL como módulo
+function registerProtocolClient() {
+  try {
+    if (process.defaultApp || !app.isPackaged) {
+      if (process.argv.length >= 2) {
+        app.setAsDefaultProtocolClient('notip', process.execPath, [path.resolve(process.argv[1])]);
+      } else {
+        app.setAsDefaultProtocolClient('notip', process.execPath, [path.resolve(__dirname)]);
+      }
+    } else {
+      app.setAsDefaultProtocolClient('notip');
+    }
+  } catch (err) {
+    console.error('[main] Error registrando protocolo notip://', err);
+  }
+}
+registerProtocolClient();
+
 const appIconPath = path.join(__dirname, 'src', 'assets', 'icon.png');
 const appIconIco  = path.join(__dirname, 'src', 'assets', 'icon.ico');
 
@@ -35,8 +54,16 @@ if (!gotTheLock) {
   process.exit(0);
 } else {
   app.on('second-instance', (_e, argv) => {
+    console.log('[second-instance] args recibidos:', argv);
     // En Windows el deep link llega como argumento de línea de comandos
-    const url = argv.find(arg => arg.startsWith('notip://'));
+    const url = argv.find(arg => 
+      typeof arg === 'string' && (
+        arg.startsWith('notip://') || 
+        arg.includes('notip://') || 
+        arg.includes('access_token=') || 
+        arg.includes('code=')
+      )
+    );
     if (url) {
       handleOAuthCallback(url);
       return;
@@ -45,6 +72,10 @@ if (!gotTheLock) {
       if (petWindow.isMinimized()) petWindow.restore();
       petWindow.show();
       petWindow.focus();
+    } else if (authWindow) {
+      if (authWindow.isMinimized()) authWindow.restore();
+      authWindow.show();
+      authWindow.focus();
     }
   });
 }
@@ -112,39 +143,84 @@ function createAuthWindow() {
 }
 
 /**
- * Procesa la URL de callback OAuth (notip://auth-callback?code=...)
- * Supabase se encarga de intercambiar el code por tokens de sesión.
+ * Procesa la URL de callback OAuth (notip://auth-callback#access_token=... o ?code=...)
+ * Soporta tanto flujo implícito (fragmento #) como flujo PKCE (código ?code=).
  */
-async function handleOAuthCallback(url) {
-  console.log('[auth] OAuth callback recibido:', url);
+async function handleOAuthCallback(rawUrl) {
+  console.log('[auth] OAuth callback recibido:', rawUrl);
   try {
     const { getSupabaseClient, storeSession } = require('./src/supabase/client');
     const sb = getSupabaseClient();
     if (!sb) return;
 
-    // Supabase extrae el code de la URL y obtiene la sesión
-    const { data, error } = await sb.auth.exchangeCodeForSession(url);
-    if (error) {
-      console.error('[auth] exchangeCodeForSession error:', error.message);
-      authWindow?.webContents.send('auth-error', error.message);
-      return;
+    let url = typeof rawUrl === 'string' ? rawUrl.replace(/^["']|["']$/g, '').trim() : '';
+
+    if (url.includes('notip://')) {
+      const idx = url.indexOf('notip://');
+      url = url.substring(idx);
     }
 
-    const session = data?.session;
-    if (!session) {
-      authWindow?.webContents.send('auth-error', 'No se pudo obtener la sesión');
-      return;
+    // ── Caso A: Flujo implícito (tokens en fragmento #access_token=...) ────────
+    if (url.includes('access_token=')) {
+      console.log('[auth] Token de acceso detectado en URL fragment');
+      const fragment = url.includes('#') ? url.split('#')[1] : (url.includes('?') ? url.split('?')[1] : url);
+      const params = new URLSearchParams(fragment);
+      const access_token = params.get('access_token');
+      const refresh_token = params.get('refresh_token');
+      const provider_token = params.get('provider_token');
+
+      if (access_token) {
+        const { data, error } = await sb.auth.setSession({
+          access_token,
+          refresh_token: refresh_token || '',
+        });
+
+        if (error) {
+          console.error('[auth] setSession error:', error.message);
+          authWindow?.webContents.send('auth-error', error.message);
+          return;
+        }
+
+        const session = data?.session;
+        if (session) {
+          const googleToken = provider_token || session.provider_token;
+          currentProviderToken = googleToken || null;
+          storeSession(session);
+          if (googleToken) {
+            store.set('notip-provider-token', googleToken);
+          }
+          console.log('[auth] Sesión iniciada con éxito para:', session.user?.email);
+          onLoginSuccess();
+          return;
+        }
+      }
     }
 
-    // Guardar el provider_token (Google OAuth token para Calendar)
-    currentProviderToken = session.provider_token;
-    storeSession(session);
-    store.set('notip-provider-token', session.provider_token || null);
+    // ── Caso B: Flujo PKCE (código en query ?code=...) ────────────────────────
+    if (url.includes('code=')) {
+      console.log('[auth] Código OAuth detectado en URL query');
+      const { data, error } = await sb.auth.exchangeCodeForSession(url);
+      if (error) {
+        console.error('[auth] exchangeCodeForSession error:', error.message);
+        authWindow?.webContents.send('auth-error', error.message);
+        return;
+      }
 
-    console.log('[auth] Sesión iniciada para:', session.user?.email);
+      const session = data?.session;
+      if (session) {
+        currentProviderToken = session.provider_token || null;
+        storeSession(session);
+        if (session.provider_token) {
+          store.set('notip-provider-token', session.provider_token);
+        }
+        console.log('[auth] Sesión iniciada para:', session.user?.email);
+        onLoginSuccess();
+        return;
+      }
+    }
 
-    // Cerrar auth window y abrir la app principal
-    onLoginSuccess();
+    console.warn('[auth] URL de callback no reconocida:', url);
+    authWindow?.webContents.send('auth-error', 'Respuesta de autenticación no reconocida');
   } catch (err) {
     console.error('[auth] handleOAuthCallback error:', err);
     authWindow?.webContents.send('auth-error', err.message);
@@ -1272,10 +1348,22 @@ app.whenReady().then(async () => {
     console.error('[main] Error al iniciar SQLite:', err);
   }
 
-  // Registrar app como handler del protocolo notip:// en Windows
-  // (necesario para recibir el callback de Google OAuth)
-  if (!app.isDefaultProtocolClient('notip')) {
-    app.setAsDefaultProtocolClient('notip');
+  // Asegurar registro del protocolo notip:// con argumentos correctos de desarrollo
+  registerProtocolClient();
+
+  // Verificar si la app fue abierta directamente mediante un deep link OAuth
+  const startupUrl = process.argv.find(arg => 
+    typeof arg === 'string' && (
+      arg.startsWith('notip://') || 
+      arg.includes('notip://') || 
+      arg.includes('access_token=') || 
+      arg.includes('code=')
+    )
+  );
+  if (startupUrl) {
+    console.log('[main] Iniciado con deep link:', startupUrl);
+    handleOAuthCallback(startupUrl);
+    return;
   }
 
   // Verificar si hay una sesión activa de Supabase
