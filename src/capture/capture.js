@@ -6,6 +6,7 @@ const btnVault          = document.getElementById('btn-vault');
 const btnBrain          = document.getElementById('btn-brain');
 const btnBoard          = document.getElementById('btn-board');
 const btnCanvas         = document.getElementById('btn-canvas');
+const btnLogout         = document.getElementById('btn-logout');
 const notesCounter      = document.getElementById('notes-counter');
 
 // ── Elements: Capture & Chat ──────────────────────────────────────────────────
@@ -204,6 +205,11 @@ btnVault.addEventListener('click', () => window.electronAPI.openVault());
 btnBrain?.addEventListener('click', () => window.electronAPI.openBrain());
 btnBoard?.addEventListener('click', () => window.electronAPI.openBoard());
 btnCanvas?.addEventListener('click', () => window.electronAPI.openCanvas());
+btnLogout?.addEventListener('click', async () => {
+  if (confirm('¿Deseas cerrar sesión en Notip?')) {
+    await window.electronAPI?.authLogout();
+  }
+});
 
 if (btnNewNote) {
   btnNewNote.addEventListener('click', resetToNewNote);

@@ -231,7 +231,8 @@ html, body {
   color: var(--text);
 }
 
-#btn-close:hover {
+#btn-close:hover,
+#btn-logout:hover {
   background: var(--rose-soft) !important;
   border-color: var(--rose-border) !important;
   color: var(--rose) !important;

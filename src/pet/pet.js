@@ -70,7 +70,32 @@ function triggerClick() {
 }
 ripple.addEventListener('animationend', () => ripple.classList.remove('active'));
 
-// Right-click → context menu (opacity, board, brain, etc.)
+// ── Passthrough para clics fuera del sprite (evita bloquear el escritorio/ventanas) ──
+window.addEventListener('DOMContentLoaded', () => {
+  window.electronAPI?.setIgnoreMouseEvents(true, { forward: true });
+});
+
+petSprite.addEventListener('mouseenter', () => {
+  window.electronAPI?.setIgnoreMouseEvents(false);
+});
+petSprite.addEventListener('mouseleave', () => {
+  if (!isDragging) {
+    window.electronAPI?.setIgnoreMouseEvents(true, { forward: true });
+  }
+});
+
+if (bubble) {
+  bubble.addEventListener('mouseenter', () => {
+    window.electronAPI?.setIgnoreMouseEvents(false);
+  });
+  bubble.addEventListener('mouseleave', () => {
+    if (!isDragging) {
+      window.electronAPI?.setIgnoreMouseEvents(true, { forward: true });
+    }
+  });
+}
+
+// Right-click → context menu (opacity, board, brain, logout, etc.)
 window.addEventListener('contextmenu', (e) => {
   e.preventDefault();
   window.electronAPI.showPetContextMenu();

@@ -725,7 +725,11 @@ function createTray() {
       { label: `Atajo: Ctrl+Shift+H (mascota)`, enabled: false },
       { label: `Atajo: Ctrl+Shift+N (captura)`, enabled: false },
       { label: `Atajo: Ctrl+Shift+B (cerebro)`, enabled: false },
-      { label: `Atajo: Ctrl+Shift+P (pizarra)`, enabled: false },
+      { type: 'separator' },
+      {
+        label: 'Cerrar sesión',
+        click: () => performLogout(),
+      },
       { type: 'separator' },
       { label: 'Salir', click: () => app.exit(0) },
     ]);
@@ -824,6 +828,79 @@ ipcMain.on('close-brain',   () => brainWindow?.hide());
 ipcMain.on('open-canvas',   () => showCanvas());
 ipcMain.on('close-canvas',  () => canvasWindow?.hide());
 
+// Permitir que clics fuera de la mascota pasen a las ventanas/escritorio de abajo
+ipcMain.on('set-ignore-mouse-events', (event, ignore, options) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  win?.setIgnoreMouseEvents(ignore, options);
+});
+
+// Menú contextual con clic derecho sobre la mascota
+ipcMain.on('show-pet-menu', () => {
+  const { getStoredUser } = require('./src/supabase/client');
+  const user = getStoredUser();
+  const userEmail = user?.email || 'Usuario';
+
+  const menu = Menu.buildFromTemplate([
+    { label: `Notip (${userEmail})`, enabled: false },
+    { type: 'separator' },
+    { label: 'Capturar nota (Ctrl+Shift+N)', click: () => showCapture() },
+    { label: 'Tablero Kanban (Ctrl+Shift+K)', click: () => showBoard() },
+    { label: 'El Cerebro 3D (Ctrl+Shift+B)', click: () => showBrain() },
+    { label: 'Pizarra Canvas (Ctrl+Shift+P)', click: () => showCanvas() },
+    { type: 'separator' },
+    {
+      label: 'Opacidad',
+      submenu: [
+        {
+          label: '100%',
+          type: 'radio',
+          checked: Math.abs(store.get('petOpacity', 1.0) - 1.0) < 0.05,
+          click: () => {
+            store.set('petOpacity', 1.0);
+            petWindow?.webContents.send('set-opacity', 1.0);
+          },
+        },
+        {
+          label: '80%',
+          type: 'radio',
+          checked: Math.abs(store.get('petOpacity', 1.0) - 0.8) < 0.05,
+          click: () => {
+            store.set('petOpacity', 0.8);
+            petWindow?.webContents.send('set-opacity', 0.8);
+          },
+        },
+        {
+          label: '60%',
+          type: 'radio',
+          checked: Math.abs(store.get('petOpacity', 1.0) - 0.6) < 0.05,
+          click: () => {
+            store.set('petOpacity', 0.6);
+            petWindow?.webContents.send('set-opacity', 0.6);
+          },
+        },
+        {
+          label: '40% (Translúcido)',
+          type: 'radio',
+          checked: Math.abs(store.get('petOpacity', 1.0) - 0.4) < 0.05,
+          click: () => {
+            store.set('petOpacity', 0.4);
+            petWindow?.webContents.send('set-opacity', 0.4);
+          },
+        },
+      ],
+    },
+    { type: 'separator' },
+    {
+      label: 'Cerrar sesión',
+      click: () => performLogout(),
+    },
+    { type: 'separator' },
+    { label: 'Salir de Notip', click: () => app.exit(0) },
+  ]);
+
+  menu.popup({ window: petWindow });
+});
+
 // ─── Auth IPC (v2) ─────────────────────────────────────────────────────────────
 ipcMain.on('close-auth', () => app.exit(0));
 
@@ -860,14 +937,14 @@ ipcMain.handle('auth-login', async () => {
 });
 
 /** Cierra la sesión y muestra la pantalla de login */
-ipcMain.handle('auth-logout', async () => {
+async function performLogout() {
   try {
     const { signOut } = require('./src/supabase/client');
     await signOut();
     store.delete('notip-provider-token');
     currentProviderToken = null;
 
-    // Destruir todas las ventanas de la app
+    // Destruir todas las ventanas de la app principal
     petWindow?.destroy(); petWindow = null;
     captureWindow?.destroy(); captureWindow = null;
     boardWindow?.destroy(); boardWindow = null;
@@ -880,9 +957,12 @@ ipcMain.handle('auth-logout', async () => {
     createAuthWindow();
     return { success: true };
   } catch (err) {
+    console.error('[auth-logout] Error:', err);
     return { error: err.message };
   }
-});
+}
+
+ipcMain.handle('auth-logout', async () => performLogout());
 
 /** Devuelve el usuario y sesión activos */
 ipcMain.handle('auth-get-session', async () => {

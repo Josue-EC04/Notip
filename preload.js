@@ -10,6 +10,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   startPetDrag:       (x, y)   => ipcRenderer.send('start-pet-drag', x, y),
   petDragMove:        ()       => ipcRenderer.send('pet-drag-move'),
   stopPetDrag:        ()       => ipcRenderer.send('stop-pet-drag'),
+  setIgnoreMouseEvents: (ignore, options) => ipcRenderer.send('set-ignore-mouse-events', ignore, options),
 
   // Capture
   closeCapture:  ()                                   => ipcRenderer.send('close-capture'),
