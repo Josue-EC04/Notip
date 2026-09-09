@@ -57,6 +57,12 @@
             <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
           </svg>
         </button>
+        <button id="btn-settings" title="Configuración y API Key">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="3"></circle>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+          </svg>
+        </button>
         <button id="btn-logout" title="Cerrar sesión">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
@@ -234,6 +240,65 @@
             <button type="button" id="btn-done-close" class="result-action-btn" title="Cerrar panel">
               <span>Cerrar</span>
             </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL DE CONFIGURACIÓN & API KEY -->
+    <div id="modal-settings" class="modal-overlay hidden">
+      <div class="modal-card">
+        <div class="modal-header">
+          <div class="modal-title-group">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="3"></circle>
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+            </svg>
+            <h3>Configuración & Cuenta</h3>
+          </div>
+          <button type="button" id="btn-close-settings" class="modal-close-btn" title="Cerrar">✕</button>
+        </div>
+
+        <div class="modal-body">
+          <!-- Cuenta & Saldo -->
+          <div class="settings-section">
+            <span class="settings-section-title">Cuenta & Saldo de IA</span>
+            <div class="settings-account-box">
+              <div class="account-avatar" id="settings-avatar">J</div>
+              <div class="account-details">
+                <span id="settings-user-email" class="account-email">Cargando cuenta...</span>
+                <div class="credits-row">
+                  <span id="settings-credits-badge" class="credits-badge">Admin · Saldo ilimitado</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- API Key de Claude / Anthropic -->
+          <div class="settings-section">
+            <div class="settings-title-row">
+              <span class="settings-section-title">API Key de Claude (Anthropic)</span>
+              <span id="settings-key-badge" class="key-source-badge default">Clave predeterminada</span>
+            </div>
+            <p class="settings-help">
+              Puedes ingresar tu propia API Key de Anthropic para usar tu saldo personal. Si la dejas vacía, Notip usará la clave predeterminada del sistema.
+            </p>
+            <div class="settings-input-group">
+              <input type="password" id="input-custom-api-key" placeholder="sk-ant-api03-..." spellcheck="false" />
+              <button type="button" id="btn-toggle-key-visibility" class="btn-input-icon" title="Ver / Ocultar">👁️</button>
+            </div>
+            <div class="settings-actions-row">
+              <button type="button" id="btn-test-key" class="btn-settings-action secondary" title="Comprobar que la clave funciona con Claude">
+                <span>Probar conexión</span>
+              </button>
+              <button type="button" id="btn-reset-key" class="btn-settings-action secondary" title="Eliminar clave personalizada y usar la de Notip">
+                <span>Usar predeterminada</span>
+              </button>
+              <button type="button" id="btn-save-key" class="btn-settings-action primary">
+                <span>Guardar clave</span>
+              </button>
+            </div>
+            <div id="settings-status-msg" class="settings-status-box hidden"></div>
           </div>
         </div>
       </div>

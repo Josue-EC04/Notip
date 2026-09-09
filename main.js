@@ -1007,6 +1007,69 @@ ipcMain.handle('get-credits', async () => {
   }
 });
 
+/** Obtiene configuración de API Key y usuario para el modal de settings */
+ipcMain.handle('get-settings', async () => {
+  try {
+    const { getStoredUser } = require('./src/supabase/client');
+    const { getCredits } = require('./src/sync/syncManager');
+    const user = getStoredUser();
+    let credits = null;
+    try {
+      credits = await getCredits();
+    } catch (_) {}
+    const customKey = store.get('anthropic_custom_key', '');
+    return {
+      user: user ? { email: user.email, name: user.user_metadata?.full_name, avatar: user.user_metadata?.avatar_url } : null,
+      credits,
+      customKey: customKey || '',
+      hasCustomKey: Boolean(customKey),
+      hasDefaultKey: Boolean(process.env.ANTHROPIC_API_KEY),
+    };
+  } catch (err) {
+    return { error: err.message };
+  }
+});
+
+/** Guarda o limpia la API Key personalizada del usuario */
+ipcMain.handle('save-custom-api-key', async (_e, key) => {
+  try {
+    if (!key || !key.trim()) {
+      store.delete('anthropic_custom_key');
+      return { success: true, removed: true };
+    }
+    const trimmed = key.trim();
+    if (!trimmed.startsWith('sk-ant-')) {
+      return { success: false, error: 'La API Key de Anthropic debe empezar con "sk-ant-"' };
+    }
+    store.set('anthropic_custom_key', trimmed);
+    return { success: true, saved: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+/** Prueba una API Key conectando con Claude Haiku */
+ipcMain.handle('test-api-key', async (_e, keyToTest) => {
+  try {
+    const Anthropic = require('@anthropic-ai/sdk');
+    const customKey = store.get('anthropic_custom_key');
+    const key = keyToTest?.trim() || customKey || process.env.ANTHROPIC_API_KEY;
+    if (!key) {
+      return { success: false, error: 'No hay ninguna API Key configurada para probar.' };
+    }
+    const client = new Anthropic.default({ apiKey: key });
+    const resp = await client.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 20,
+      messages: [{ role: 'user', content: 'Responde solo "Conexión exitosa"' }],
+    });
+    const text = resp.content?.[0]?.text || 'Conexión exitosa';
+    return { success: true, response: text };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
 let _google = null;
 function getGoogleApi() {
   if (!_google) {
@@ -1182,7 +1245,8 @@ ipcMain.handle('save-note', async (_e, texto, forcedType = null, contextoPrevio 
   captureWindow?.webContents.send('ai-thinking');
 
   let clasificacion = null;
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+  const customKey = store.get('anthropic_custom_key');
+  const apiKey = (customKey && customKey.trim()) ? customKey.trim() : process.env.ANTHROPIC_API_KEY;
 
   if (tieneApiKey(apiKey)) {
     try {

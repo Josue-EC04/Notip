@@ -30,6 +30,21 @@ const activeNoteTitle    = document.getElementById('active-note-title');
 const btnBannerNewNote   = document.getElementById('btn-banner-new-note');
 const btnActionNewNote   = document.getElementById('btn-action-new-note');
 
+// Settings Elements
+const btnSettings             = document.getElementById('btn-settings');
+const modalSettings           = document.getElementById('modal-settings');
+const btnCloseSettings        = document.getElementById('btn-close-settings');
+const settingsAvatar          = document.getElementById('settings-avatar');
+const settingsUserEmail       = document.getElementById('settings-user-email');
+const settingsCreditsBadge    = document.getElementById('settings-credits-badge');
+const settingsKeyBadge        = document.getElementById('settings-key-badge');
+const inputCustomApiKey       = document.getElementById('input-custom-api-key');
+const btnToggleKeyVisibility  = document.getElementById('btn-toggle-key-visibility');
+const btnTestKey              = document.getElementById('btn-test-key');
+const btnResetKey             = document.getElementById('btn-reset-key');
+const btnSaveKey              = document.getElementById('btn-save-key');
+const settingsStatusMsg       = document.getElementById('settings-status-msg');
+
 // Dynamic Lower Console Elements
 const sectionZeroState        = document.getElementById('section-zero-state');
 const sectionChatStream       = document.getElementById('section-chat-stream');
@@ -310,6 +325,151 @@ window.addEventListener('keydown', e => {
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'n') {
     e.preventDefault();
     resetToNewNote();
+  }
+});
+
+// ── Settings Modal Logic ──────────────────────────────────────────────────────
+async function openSettings() {
+  modalSettings?.classList.remove('hidden');
+  hideSettingsStatus();
+  try {
+    const data = await window.electronAPI?.getSettings();
+    if (!data) return;
+
+    if (data.user) {
+      settingsUserEmail.textContent = data.user.email || 'Usuario de Notip';
+      const initial = (data.user.name || data.user.email || 'U').charAt(0).toUpperCase();
+      settingsAvatar.textContent = initial;
+    } else {
+      settingsUserEmail.textContent = 'josue.ec.4411@gmail.com';
+      settingsAvatar.textContent = 'J';
+    }
+
+    if (data.credits) {
+      if (data.credits.es_admin) {
+        settingsCreditsBadge.textContent = 'Admin · Saldo ilimitado';
+        settingsCreditsBadge.style.background = '#D1FAE5';
+        settingsCreditsBadge.style.color = '#047857';
+      } else {
+        const saldo = data.credits.saldo ?? 0;
+        settingsCreditsBadge.textContent = `${saldo} créditos restantes`;
+        settingsCreditsBadge.style.background = saldo > 0 ? '#E0F2FE' : '#FEE2E2';
+        settingsCreditsBadge.style.color = saldo > 0 ? '#0369A1' : '#B91C1C';
+      }
+    } else {
+      settingsCreditsBadge.textContent = 'Admin · Saldo ilimitado';
+    }
+
+    if (data.hasCustomKey) {
+      settingsKeyBadge.textContent = 'Clave personalizada';
+      settingsKeyBadge.className = 'key-source-badge custom';
+      inputCustomApiKey.value = data.customKey || '';
+    } else {
+      settingsKeyBadge.textContent = 'Clave predeterminada';
+      settingsKeyBadge.className = 'key-source-badge default';
+      inputCustomApiKey.value = '';
+    }
+  } catch (err) {
+    console.error('[capture] Error loading settings:', err);
+  }
+}
+
+function closeSettings() {
+  modalSettings?.classList.add('hidden');
+  hideSettingsStatus();
+}
+
+function showSettingsStatus(msg, type = 'info') {
+  if (!settingsStatusMsg) return;
+  settingsStatusMsg.textContent = msg;
+  settingsStatusMsg.className = `settings-status-box ${type}`;
+}
+
+function hideSettingsStatus() {
+  if (!settingsStatusMsg) return;
+  settingsStatusMsg.classList.add('hidden');
+}
+
+btnSettings?.addEventListener('click', openSettings);
+btnCloseSettings?.addEventListener('click', closeSettings);
+modalSettings?.addEventListener('click', e => {
+  if (e.target === modalSettings) closeSettings();
+});
+
+btnToggleKeyVisibility?.addEventListener('click', () => {
+  if (inputCustomApiKey.type === 'password') {
+    inputCustomApiKey.type = 'text';
+    btnToggleKeyVisibility.textContent = '🔒';
+  } else {
+    inputCustomApiKey.type = 'password';
+    btnToggleKeyVisibility.textContent = '👁️';
+  }
+});
+
+btnSaveKey?.addEventListener('click', async () => {
+  const key = inputCustomApiKey.value.trim();
+  if (key && !key.startsWith('sk-ant-')) {
+    showSettingsStatus('La clave debe ser de Anthropic y comenzar con "sk-ant-"', 'error');
+    return;
+  }
+  btnSaveKey.disabled = true;
+  btnSaveKey.textContent = 'Guardando...';
+  try {
+    const res = await window.electronAPI?.saveCustomApiKey(key);
+    btnSaveKey.disabled = false;
+    btnSaveKey.textContent = 'Guardar clave';
+    if (res?.success) {
+      if (res.removed) {
+        showSettingsStatus('Clave personalizada eliminada. Usando clave predeterminada de Notip.', 'info');
+        settingsKeyBadge.textContent = 'Clave predeterminada';
+        settingsKeyBadge.className = 'key-source-badge default';
+      } else {
+        showSettingsStatus('¡Clave personalizada guardada con éxito!', 'success');
+        settingsKeyBadge.textContent = 'Clave personalizada';
+        settingsKeyBadge.className = 'key-source-badge custom';
+      }
+      showToast('Configuración guardada');
+    } else {
+      showSettingsStatus(res?.error || 'Error al guardar la clave', 'error');
+    }
+  } catch (err) {
+    btnSaveKey.disabled = false;
+    btnSaveKey.textContent = 'Guardar clave';
+    showSettingsStatus(err.message, 'error');
+  }
+});
+
+btnResetKey?.addEventListener('click', async () => {
+  inputCustomApiKey.value = '';
+  try {
+    await window.electronAPI?.saveCustomApiKey('');
+    settingsKeyBadge.textContent = 'Clave predeterminada';
+    settingsKeyBadge.className = 'key-source-badge default';
+    showSettingsStatus('Restaurado a la clave predeterminada de Notip.', 'info');
+    showToast('Clave restaurada');
+  } catch (err) {
+    showSettingsStatus(err.message, 'error');
+  }
+});
+
+btnTestKey?.addEventListener('click', async () => {
+  const key = inputCustomApiKey.value.trim();
+  btnTestKey.disabled = true;
+  btnTestKey.textContent = 'Probando...';
+  showSettingsStatus('Conectando con Claude Haiku...', 'info');
+  try {
+    const res = await window.electronAPI?.testApiKey(key);
+    btnTestKey.disabled = false;
+    btnTestKey.textContent = 'Probar conexión';
+    if (res?.success) {
+      showSettingsStatus('¡Conexión exitosa con Claude! La IA está lista para clasificar notas.', 'success');
+    } else {
+      showSettingsStatus(`Error de conexión: ${res?.error || 'No se pudo conectar'}`, 'error');
+    }
+  } catch (err) {
+    btnTestKey.disabled = false;
+    btnTestKey.textContent = 'Probar conexión';
+    showSettingsStatus(`Excepción: ${err.message}`, 'error');
   }
 });
 

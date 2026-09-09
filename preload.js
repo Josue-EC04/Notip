@@ -65,6 +65,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   /** Abre un link externo en el navegador predeterminado */
   openExternal:     (url)                      => ipcRenderer.invoke('open-external', url),
 
+  // ─── Settings & Custom API Key ───────────────────────────────────────────────
+  getSettings:       ()                            => ipcRenderer.invoke('get-settings'),
+  saveCustomApiKey:  (key)                         => ipcRenderer.invoke('save-custom-api-key', key),
+  testApiKey:        (key)                         => ipcRenderer.invoke('test-api-key', key),
+
   // Events from main → renderer
   on: (channel, callback) => {
     const allowed = [
