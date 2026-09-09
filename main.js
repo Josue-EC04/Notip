@@ -291,7 +291,7 @@ function createPetWindow() {
 
   petWindow.loadFile(path.join(__dirname, 'src', 'pet', 'pet.html'));
 
-  petWindow.setAlwaysOnTop(true, 'screen-saver');
+  petWindow.setAlwaysOnTop(true, 'pop-up-menu');
   try {
     petWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
   } catch (_) {}
@@ -591,7 +591,7 @@ function showPet(focus = false) {
   if (petWindow.isMinimized()) petWindow.restore();
   if (!petWindow.isVisible()) petWindow.show();
 
-  petWindow.setAlwaysOnTop(true, 'screen-saver');
+  petWindow.setAlwaysOnTop(true, 'pop-up-menu');
   petWindow.moveTop();
   if (focus) petWindow.focus();
 }
@@ -611,7 +611,7 @@ function showCapture() {
 
   const [px, py] = petWindow.getPosition();
   captureWindow.show();
-  captureWindow.setAlwaysOnTop(true, 'screen-saver');
+  captureWindow.setAlwaysOnTop(true, 'pop-up-menu');
   positionCaptureNearPet(px, py);
   
   // Re-confirmar posición tras el paint inicial de Windows DWM
@@ -619,7 +619,7 @@ function showCapture() {
     if (captureWindow && captureWindow.isVisible() && petWindow) {
       const [curPx, curPy] = petWindow.getPosition();
       positionCaptureNearPet(curPx, curPy);
-      petWindow.setAlwaysOnTop(true, 'screen-saver');
+      petWindow.setAlwaysOnTop(true, 'pop-up-menu');
       petWindow.moveTop();
     }
   }, 40);
@@ -896,9 +896,13 @@ ipcMain.on('show-pet-menu', () => {
     },
     { type: 'separator' },
     { label: 'Salir de Notip', click: () => app.exit(0) },
-  ]);
   console.log('[main] Desplegando menú contextual de la mascota');
-  menu.popup();
+  if (petWindow && !petWindow.isDestroyed()) {
+    petWindow.focus();
+    menu.popup({ window: petWindow });
+  } else {
+    menu.popup();
+  }
 });
 
 // ─── Auth IPC (v2) ─────────────────────────────────────────────────────────────

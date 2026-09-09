@@ -487,130 +487,152 @@ function appendUserMessage(text, save = true) {
   }
 }
 
+function formatShortDate(dateStr) {
+  if (!dateStr) return '';
+  try {
+    const parts = String(dateStr).split('-');
+    if (parts.length === 3) {
+      const year = parseInt(parts[0], 10);
+      const month = parseInt(parts[1], 10) - 1;
+      const day = parseInt(parts[2], 10);
+      const d = new Date(year, month, day);
+      const months = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+      return `${d.getDate()} ${months[d.getMonth()]}`;
+    }
+    return String(dateStr);
+  } catch (_) {
+    return String(dateStr);
+  }
+}
+
 function appendNotipResponse(result, save = true) {
   if (!chatStreamMessages) return;
-  const tipo = result.tipo ?? 'nota';
-  const labels = { tarea: 'Tarea', idea: 'Idea', nota: 'Nota', sin_clasificar: 'Nota' };
-  const badgeLabel = labels[tipo] ?? tipo;
+  try {
+    const tipo = result.tipo ?? 'nota';
+    const labels = { tarea: 'Tarea', idea: 'Idea', nota: 'Nota', sin_clasificar: 'Nota' };
+    const badgeLabel = labels[tipo] ?? tipo;
 
-  const row = document.createElement('div');
-  row.className = 'chat-row-notip';
+    const row = document.createElement('div');
+    row.className = 'chat-row-notip';
 
-  const feedbackText = result.mensaje_feedback || 'Nota procesada y organizada en tu bóveda.';
+    const feedbackText = result.mensaje_feedback || 'Nota procesada y organizada en tu bóveda.';
 
-  let metaTagsHtml = '';
-  if (result.curso) {
-    metaTagsHtml += `<span class="res-meta-pill tag-curso"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>${escapeHtml(result.curso)}</span>`;
-  }
-  if (result.fecha_entrega) {
-    const formattedD = formatShortDate(result.fecha_entrega);
-    const timeSnippet = result.hora_entrega ? ` · ${result.hora_entrega}` : '';
-    metaTagsHtml += `<span class="res-meta-pill tag-date"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>${escapeHtml(formattedD + timeSnippet)}</span>`;
-  } else if (result.hora_entrega) {
-    metaTagsHtml += `<span class="res-meta-pill tag-date"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>A las ${escapeHtml(result.hora_entrega)}</span>`;
-  }
-  if (result.prioridad && result.prioridad !== 'normal') {
-    metaTagsHtml += `<span class="res-meta-pill tag-prio tag-prio-${result.prioridad}"><span class="prio-indicator-dot"></span>${result.prioridad.toUpperCase()}</span>`;
-  }
+    let metaTagsHtml = '';
+    if (result.curso) {
+      metaTagsHtml += `<span class="res-meta-pill tag-curso"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>${escapeHtml(result.curso)}</span>`;
+    }
+    if (result.fecha_entrega) {
+      const formattedD = formatShortDate(result.fecha_entrega);
+      const timeSnippet = result.hora_entrega ? ` · ${result.hora_entrega}` : '';
+      metaTagsHtml += `<span class="res-meta-pill tag-date"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>${escapeHtml(formattedD + timeSnippet)}</span>`;
+    } else if (result.hora_entrega) {
+      metaTagsHtml += `<span class="res-meta-pill tag-date"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>A las ${escapeHtml(result.hora_entrega)}</span>`;
+    }
+    if (result.prioridad && result.prioridad !== 'normal') {
+      metaTagsHtml += `<span class="res-meta-pill tag-prio tag-prio-${result.prioridad}"><span class="prio-indicator-dot"></span>${result.prioridad.toUpperCase()}</span>`;
+    }
 
-  // Si es tarea o tiene fecha de entrega, mostrar botón para sincronizar con Google Calendar
-  const isTaskOrCalendar = (result.tipo === 'tarea' || Boolean(result.fecha_entrega));
-  let calendarBoxHtml = '';
-  if (isTaskOrCalendar) {
-    const dLabel = result.fecha_entrega ? formatShortDate(result.fecha_entrega) : 'Fecha pendiente';
-    const tLabel = result.hora_entrega ? ` · ${result.hora_entrega}` : '';
-    calendarBoxHtml = `
-      <div class="calendar-action-box">
-        <div class="calendar-action-info">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
-            <line x1="16" y1="2" x2="16" y2="6"></line>
-            <line x1="8" y1="2" x2="8" y2="6"></line>
-            <line x1="3" y1="10" x2="21" y2="10"></line>
-          </svg>
-          <span>${escapeHtml(dLabel + tLabel)}</span>
+    // Si es tarea o tiene fecha de entrega, mostrar botón para sincronizar con Google Calendar
+    const isTaskOrCalendar = (result.tipo === 'tarea' || Boolean(result.fecha_entrega));
+    let calendarBoxHtml = '';
+    if (isTaskOrCalendar) {
+      const dLabel = result.fecha_entrega ? formatShortDate(result.fecha_entrega) : 'Fecha pendiente';
+      const tLabel = result.hora_entrega ? ` · ${result.hora_entrega}` : '';
+      calendarBoxHtml = `
+        <div class="calendar-action-box">
+          <div class="calendar-action-info">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+              <line x1="16" y1="2" x2="16" y2="6"></line>
+              <line x1="8" y1="2" x2="8" y2="6"></line>
+              <line x1="3" y1="10" x2="21" y2="10"></line>
+            </svg>
+            <span>${escapeHtml(dLabel + tLabel)}</span>
+          </div>
+          <button class="btn-add-calendar" type="button">
+            📅 Agregar a Google Calendar
+          </button>
         </div>
-        <button class="btn-add-calendar" type="button">
-          📅 Agregar a Google Calendar
-        </button>
+      `;
+    }
+
+    row.innerHTML = `
+      <div class="claude-response-hub">
+        <div class="claude-hub-header">
+          <div class="notip-avatar-badge" title="Notip AI"></div>
+          <div class="claude-hub-title-wrap">
+            <span class="claude-hub-name">Notip AI</span>
+            <span class="claude-hub-sub">Respuesta & Análisis</span>
+          </div>
+        </div>
+
+        <div class="claude-tip-card">
+          <div class="tip-card-badge">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+            <span>Tip de Notip</span>
+          </div>
+          <div class="tip-card-content">${escapeHtml(feedbackText)}</div>
+        </div>
+
+        <div class="chat-card-result">
+          <div class="card-result-top">
+            <span class="chat-card-badge ${tipo}">${badgeLabel}</span>
+            <span class="chat-card-title">${escapeHtml(result.titulo ?? result.texto_reescrito ?? 'Sin título')}</span>
+          </div>
+          ${metaTagsHtml ? `<div class="card-result-pills">${metaTagsHtml}</div>` : ''}
+          ${calendarBoxHtml}
+        </div>
       </div>
     `;
-  }
 
-  row.innerHTML = `
-    <div class="claude-response-hub">
-      <div class="claude-hub-header">
-        <div class="notip-avatar-badge" title="Notip AI"></div>
-        <div class="claude-hub-title-wrap">
-          <span class="claude-hub-name">Notip AI</span>
-          <span class="claude-hub-sub">Respuesta & Análisis</span>
-        </div>
-      </div>
+    // Listener del botón de Google Calendar
+    const btnCal = row.querySelector('.btn-add-calendar');
+    if (btnCal) {
+      btnCal.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        btnCal.disabled = true;
+        btnCal.textContent = 'Agregando a Google...';
+        try {
+          const calRes = await window.electronAPI.addCalendarEvent({
+            titulo: result.titulo || result.texto_reescrito,
+            descripcion: result.descripcion || result.mensaje_feedback,
+            fecha_entrega: result.fecha_entrega,
+            hora_entrega: result.hora_entrega,
+          });
 
-      <div class="claude-tip-card">
-        <div class="tip-card-badge">
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
-          <span>Tip de Notip</span>
-        </div>
-        <div class="tip-card-content">${escapeHtml(feedbackText)}</div>
-      </div>
-
-      <div class="chat-card-result">
-        <div class="card-result-top">
-          <span class="chat-card-badge ${tipo}">${badgeLabel}</span>
-          <span class="chat-card-title">${escapeHtml(result.titulo ?? result.texto_reescrito ?? 'Sin título')}</span>
-        </div>
-        ${metaTagsHtml ? `<div class="card-result-pills">${metaTagsHtml}</div>` : ''}
-        ${calendarBoxHtml}
-      </div>
-    </div>
-  `;
-
-  // Listener del botón de Google Calendar
-  const btnCal = row.querySelector('.btn-add-calendar');
-  if (btnCal) {
-    btnCal.addEventListener('click', async (e) => {
-      e.stopPropagation();
-      btnCal.disabled = true;
-      btnCal.textContent = 'Agregando a Google...';
-      try {
-        const calRes = await window.electronAPI.addCalendarEvent({
-          titulo: result.titulo || result.texto_reescrito,
-          descripcion: result.descripcion || result.mensaje_feedback,
-          fecha_entrega: result.fecha_entrega,
-          hora_entrega: result.hora_entrega,
-        });
-
-        if (calRes?.success) {
-          btnCal.innerHTML = '✓ En tu Google Calendar';
-          btnCal.classList.add('calendar-success');
-          showToast('✓ Evento sincronizado en Google Calendar');
-          if (calRes.htmlLink) {
-            btnCal.onclick = (ev) => {
-              ev.stopPropagation();
-              window.electronAPI.openExternal(calRes.htmlLink);
-            };
-            btnCal.title = 'Abrir en Google Calendar web';
+          if (calRes?.success) {
+            btnCal.innerHTML = '✓ En tu Google Calendar';
+            btnCal.classList.add('calendar-success');
+            showToast('✓ Evento sincronizado en Google Calendar');
+            if (calRes.htmlLink) {
+              btnCal.onclick = (ev) => {
+                ev.stopPropagation();
+                window.electronAPI.openExternal(calRes.htmlLink);
+              };
+              btnCal.title = 'Abrir en Google Calendar web';
+            }
+          } else {
+            btnCal.disabled = false;
+            btnCal.textContent = 'Reintentar Calendar';
+            showToast(calRes?.error || 'No se pudo agregar a Google Calendar', true);
           }
-        } else {
+        } catch (err) {
           btnCal.disabled = false;
           btnCal.textContent = 'Reintentar Calendar';
-          showToast(calRes?.error || 'No se pudo agregar a Google Calendar', true);
+          showToast('Error al conectar con Google Calendar', true);
         }
-      } catch (err) {
-        btnCal.disabled = false;
-        btnCal.textContent = 'Reintentar Calendar';
-        showToast('Error al conectar con Google Calendar', true);
-      }
-    });
-  }
+      });
+    }
 
-  chatStreamMessages.appendChild(row);
-  chatStreamMessages.scrollTop = chatStreamMessages.scrollHeight;
+    chatStreamMessages.appendChild(row);
+    chatStreamMessages.scrollTop = chatStreamMessages.scrollHeight;
 
-  if (save) {
-    chatHistory.push({ isUser: false, result });
-    saveChatToStorage();
+    if (save) {
+      chatHistory.push({ isUser: false, result });
+      saveChatToStorage();
+    }
+  } catch (err) {
+    console.error('[capture] appendNotipResponse error:', err);
   }
 }
 
