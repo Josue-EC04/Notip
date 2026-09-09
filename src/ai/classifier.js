@@ -253,6 +253,10 @@ Si no hay notas con relación directa, retorna { "conexiones": [] }.`;
   }
 }
 
+function tieneApiKey(key) {
+  return typeof key === 'string' && key.trim().length > 10 && !key.includes('tu_api_key') && !key.includes('your_api_key');
+}
+
 /**
  * Clasificador local inteligente por reglas/heurística.
  * Se activa como respaldo si la API de Claude no responde, hay error de autenticación (401),

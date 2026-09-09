@@ -296,10 +296,11 @@ async function handleSave() {
   try {
     result = await window.electronAPI.saveNote(text, forcedType, activeNoteContext);
   } catch (err) {
+    console.error('[capture] saveNote exception:', err);
     removeThinkingRow();
     hideAiBar();
     setSavingState(false);
-    showToast('Error inesperado al conectar con el sistema', true);
+    showToast(err?.message ? `Error: ${err.message}` : 'Error inesperado al conectar con el sistema', true);
     isSaving = false;
     return;
   }

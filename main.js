@@ -898,13 +898,12 @@ ipcMain.on('show-pet-menu', () => {
     { label: 'Salir de Notip', click: () => app.exit(0) },
   ]);
 
-  console.log('[main] Desplegando menú contextual de la mascota');
-  if (petWindow && !petWindow.isDestroyed()) {
-    petWindow.focus();
-    menu.popup({ window: petWindow });
-  } else {
-    menu.popup();
-  }
+  const cursorPoint = screen.getCursorScreenPoint();
+  console.log('[main] Desplegando menú contextual en:', cursorPoint);
+  menu.popup({
+    x: cursorPoint.x,
+    y: cursorPoint.y,
+  });
 });
 
 // ─── Auth IPC (v2) ─────────────────────────────────────────────────────────────

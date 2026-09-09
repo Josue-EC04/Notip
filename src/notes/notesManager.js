@@ -268,12 +268,38 @@ function addSuggestedConnection(filePath, targetTitle) {
   }
 }
 
+// ─── Obtener nota individual por ruta ─────────────────────────────────────────
+function getNoteByPath(filePath) {
+  if (!filePath || !fs.existsSync(filePath)) return null;
+  try {
+    const raw = fs.readFileSync(filePath, 'utf8');
+    const parsed = matter(raw);
+    return {
+      filename: path.basename(filePath),
+      filePath,
+      titulo: parsed.data.titulo || path.basename(filePath, '.md'),
+      contenido: parsed.content || '',
+      content: parsed.content || '',
+      tipo: parsed.data.tipo || 'nota',
+      tags: parsed.data.tags || [],
+      prioridad: parsed.data.prioridad || 'normal',
+      conexiones: parsed.data.conexiones || [],
+      conexiones_ia: parsed.data.conexiones_sugeridas || [],
+      fecha_creacion: parsed.data.creado || new Date().toISOString(),
+    };
+  } catch (err) {
+    console.error('[notesManager] Error in getNoteByPath:', err);
+    return null;
+  }
+}
+
 module.exports = {
   saveRawNote,
   updateNoteClassification,
   saveClassifiedNote,
   updateExistingNote,
   getAllNotes,
+  getNoteByPath,
   deleteNote,
   updateNoteFields,
   addConnectionToNote,
