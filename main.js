@@ -835,26 +835,28 @@ ipcMain.on('set-ignore-mouse-events', (event, ignore, options) => {
 });
 
 // Menú contextual con clic derecho sobre la mascota
-ipcMain.on('show-pet-menu', (_e, coords) => {
+ipcMain.on('show-pet-menu', () => {
   const { getStoredUser } = require('./src/supabase/client');
   const user = getStoredUser();
   const userEmail = user?.email || 'Usuario';
+  const currentOpacity = store.get('petOpacity', 1.0);
 
   const menu = Menu.buildFromTemplate([
     { label: `Notip (${userEmail})`, enabled: false },
     { type: 'separator' },
-    { label: 'Capturar nota (Ctrl+Shift+N)', click: () => showCapture() },
+    { label: 'Nueva captura / Chat (Ctrl+Shift+N)', click: () => showCapture() },
     { label: 'Tablero Kanban (Ctrl+Shift+K)', click: () => showBoard() },
-    { label: 'El Cerebro 3D (Ctrl+Shift+B)', click: () => showBrain() },
+    { label: 'El Cerebro (Grafo 2D/3D)', click: () => showBrain() },
     { label: 'Pizarra Canvas (Ctrl+Shift+P)', click: () => showCanvas() },
+    { label: 'Abrir carpeta Vault', click: () => shell.openPath(vaultPath) },
     { type: 'separator' },
     {
       label: 'Opacidad',
       submenu: [
         {
-          label: '100%',
+          label: '100% (Sólido)',
           type: 'radio',
-          checked: Math.abs(store.get('petOpacity', 1.0) - 1.0) < 0.05,
+          checked: Math.abs(currentOpacity - 1.0) < 0.05,
           click: () => {
             store.set('petOpacity', 1.0);
             petWindow?.webContents.send('set-opacity', 1.0);
@@ -863,7 +865,7 @@ ipcMain.on('show-pet-menu', (_e, coords) => {
         {
           label: '80%',
           type: 'radio',
-          checked: Math.abs(store.get('petOpacity', 1.0) - 0.8) < 0.05,
+          checked: Math.abs(currentOpacity - 0.8) < 0.05,
           click: () => {
             store.set('petOpacity', 0.8);
             petWindow?.webContents.send('set-opacity', 0.8);
@@ -872,7 +874,7 @@ ipcMain.on('show-pet-menu', (_e, coords) => {
         {
           label: '60%',
           type: 'radio',
-          checked: Math.abs(store.get('petOpacity', 1.0) - 0.6) < 0.05,
+          checked: Math.abs(currentOpacity - 0.6) < 0.05,
           click: () => {
             store.set('petOpacity', 0.6);
             petWindow?.webContents.send('set-opacity', 0.6);
@@ -881,7 +883,7 @@ ipcMain.on('show-pet-menu', (_e, coords) => {
         {
           label: '40% (Translúcido)',
           type: 'radio',
-          checked: Math.abs(store.get('petOpacity', 1.0) - 0.4) < 0.05,
+          checked: Math.abs(currentOpacity - 0.4) < 0.05,
           click: () => {
             store.set('petOpacity', 0.4);
             petWindow?.webContents.send('set-opacity', 0.4);
@@ -889,7 +891,17 @@ ipcMain.on('show-pet-menu', (_e, coords) => {
         },
       ],
     },
+    {
+      label: 'Posición rápida',
+      submenu: [
+        { label: 'Esquina inferior derecha', click: () => dockPetToCorner('bottom-right') },
+        { label: 'Esquina inferior izquierda', click: () => dockPetToCorner('bottom-left') },
+        { label: 'Esquina superior derecha', click: () => dockPetToCorner('top-right') },
+        { label: 'Centrar mascota en pantalla', click: () => dockPetToCorner('center') },
+      ],
+    },
     { type: 'separator' },
+    { label: 'Ocultar mascota (Ctrl+Shift+H)', click: () => hidePet() },
     {
       label: 'Cerrar sesión',
       click: () => performLogout(),
@@ -900,10 +912,7 @@ ipcMain.on('show-pet-menu', (_e, coords) => {
 
   if (petWindow && !petWindow.isDestroyed()) {
     petWindow.focus();
-    const cx = (Number.isFinite(coords?.clientX) && coords.clientX >= 0 && coords.clientX <= 260) ? Math.round(coords.clientX) : 130;
-    const cy = (Number.isFinite(coords?.clientY) && coords.clientY >= 0 && coords.clientY <= 170) ? Math.round(coords.clientY) : 114;
-    console.log('[main] Desplegando menú contextual en petWindow client (', cx, cy, ')');
-    menu.popup({ window: petWindow, x: cx, y: cy });
+    menu.popup({ window: petWindow });
   } else {
     menu.popup();
   }
@@ -1032,7 +1041,15 @@ ipcMain.handle('add-calendar-event', async (_e, params) => {
 
       const hStartStr = String(h).padStart(2, '0');
       const mStartStr = String(m).padStart(2, '0');
-      const startDateTimeStr = `${fecha_entrega}T${hStartStr}:${mStartStr}:00`;
+
+      // Calcular offset local RFC 3339 (ej: -05:00 para America/Lima)
+      const d = new Date();
+      const offset = -d.getTimezoneOffset();
+      const sign = offset >= 0 ? '+' : '-';
+      const pad = num => String(Math.floor(Math.abs(num))).padStart(2, '0');
+      const offsetStr = sign + pad(offset / 60) + ':' + pad(offset % 60);
+
+      const startDateTimeStr = `${fecha_entrega}T${hStartStr}:${mStartStr}:00${offsetStr}`;
 
       // 1 hora de duración por defecto
       let hEnd = h + 1;
@@ -1046,7 +1063,7 @@ ipcMain.handle('add-calendar-event', async (_e, params) => {
       }
       const hEndStr = String(hEnd).padStart(2, '0');
       const mEndStr = String(mEnd).padStart(2, '0');
-      const endDateTimeStr = `${endDateStr}T${hEndStr}:${mEndStr}:00`;
+      const endDateTimeStr = `${endDateStr}T${hEndStr}:${mEndStr}:00${offsetStr}`;
 
       eventBody.start = { dateTime: startDateTimeStr, timeZone };
       eventBody.end   = { dateTime: endDateTimeStr,   timeZone };
@@ -1059,8 +1076,27 @@ ipcMain.handle('add-calendar-event', async (_e, params) => {
       eventBody.end   = { date: today };
     }
 
+    // Buscar si el usuario tiene un calendario secundario específico para Cursos
+    let targetCalendarId = 'primary';
+    try {
+      const calList = await calendar.calendarList.list();
+      const items = calList?.data?.items || [];
+      const cursosCal = items.find(c => c.summary && c.summary.trim().toLowerCase().includes('curso'));
+      if (cursosCal) {
+        targetCalendarId = cursosCal.id;
+        console.log('[calendar] Usando calendario Cursos encontrado:', cursosCal.summary, targetCalendarId);
+      }
+    } catch (cErr) {
+      console.warn('[calendar] No se pudo listar calendarios secundarios, usando primary:', cErr.message);
+    }
+
+    // Si se inserta en primary porque no tiene calendario Cursos separado, usar color amarillo (colorId: '5')
+    if (targetCalendarId === 'primary') {
+      eventBody.colorId = '5';
+    }
+
     const res = await calendar.events.insert({
-      calendarId: 'primary',
+      calendarId: targetCalendarId,
       requestBody: eventBody,
     });
 
@@ -1074,76 +1110,6 @@ ipcMain.handle('add-calendar-event', async (_e, params) => {
 
 ipcMain.handle('open-external', (_e, url) => {
   if (url) shell.openExternal(url);
-});
-
-ipcMain.on('show-pet-menu', () => {
-  const currentOpacity = store.get('petOpacity', 1.0);
-  const menu = Menu.buildFromTemplate([
-    { label: 'Notip — Mascota', enabled: false },
-    { type: 'separator' },
-    {
-      label: 'Opacidad',
-      submenu: [
-        {
-          label: '100% (Sólido)',
-          type: 'radio',
-          checked: Math.abs(currentOpacity - 1.0) < 0.05,
-          click: () => {
-            store.set('petOpacity', 1.0);
-            petWindow?.webContents.send('set-opacity', 1.0);
-          },
-        },
-        {
-          label: '80%',
-          type: 'radio',
-          checked: Math.abs(currentOpacity - 0.8) < 0.05,
-          click: () => {
-            store.set('petOpacity', 0.8);
-            petWindow?.webContents.send('set-opacity', 0.8);
-          },
-        },
-        {
-          label: '60%',
-          type: 'radio',
-          checked: Math.abs(currentOpacity - 0.6) < 0.05,
-          click: () => {
-            store.set('petOpacity', 0.6);
-            petWindow?.webContents.send('set-opacity', 0.6);
-          },
-        },
-        {
-          label: '40% (Translúcido / Fantasma)',
-          type: 'radio',
-          checked: Math.abs(currentOpacity - 0.4) < 0.05,
-          click: () => {
-            store.set('petOpacity', 0.4);
-            petWindow?.webContents.send('set-opacity', 0.4);
-          },
-        },
-      ],
-    },
-    {
-      label: 'Posición rápida',
-      submenu: [
-        { label: 'Esquina inferior derecha', click: () => dockPetToCorner('bottom-right') },
-        { label: 'Esquina inferior izquierda', click: () => dockPetToCorner('bottom-left') },
-        { label: 'Esquina superior derecha', click: () => dockPetToCorner('top-right') },
-        { label: 'Centrar mascota en pantalla', click: () => dockPetToCorner('center') },
-      ],
-    },
-    { type: 'separator' },
-    { label: 'Nueva captura / Chat', click: () => showCapture() },
-    { label: 'Tablero de tareas (Kanban)', click: () => showBoard() },
-    { label: 'El Cerebro (Grafo 2D/3D)', click: () => showBrain() },
-    { label: 'Pizarra de notas (Canvas)', click: () => showCanvas() },
-    { label: 'Abrir carpeta Vault', click: () => shell.openPath(vaultPath) },
-    { type: 'separator' },
-    { label: 'Ocultar mascota (Ctrl+Shift+H)', click: () => hidePet() },
-    { label: 'Salir de Notip', click: () => app.exit(0) },
-  ]);
-  if (petWindow) {
-    menu.popup({ window: petWindow });
-  }
 });
 
 // Mover la mascota (arrastre fijado exactamente al cursor del mouse)

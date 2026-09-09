@@ -11,29 +11,19 @@ let startScreenX = 0, startScreenY = 0;
 let hasMoved = false;
 
 petSprite.addEventListener('pointerdown', e => {
-  if (e.button === 2) {
-    handleContextMenu(e);
-    return;
-  }
-  if (e.button !== 0) return; // Only left click
+  if (e.button !== 0) return; // Only left click for dragging
   isDragging = true;
   hasMoved = false;
   startScreenX = e.screenX;
   startScreenY = e.screenY;
   
-  // Guardar el punto de agarre exacto dentro de la ventana de 260x170 (centro del robot ~ 130, 114)
+  // Guardar el punto de agarre exacto dentro de la ventana de 260x170
   const cx = (typeof e.clientX === 'number' && Number.isFinite(e.clientX)) ? e.clientX : 130;
   const cy = (typeof e.clientY === 'number' && Number.isFinite(e.clientY)) ? e.clientY : 114;
   window.electronAPI.startPetDrag(cx, cy);
   
   try { petSprite.setPointerCapture(e.pointerId); } catch (_) {}
   e.preventDefault();
-});
-
-petSprite.addEventListener('mousedown', e => {
-  if (e.button === 2) {
-    handleContextMenu(e);
-  }
 });
 
 petSprite.addEventListener('pointermove', e => {
@@ -83,83 +73,23 @@ ripple.addEventListener('animationend', () => ripple.classList.remove('active'))
 // ── Passthrough para clics fuera del sprite (evita bloquear el escritorio/ventanas) ──
 let isIgnoringMouse = false;
 
-function setWindowIgnore(ignore) {
-  if (isIgnoringMouse !== ignore) {
-    isIgnoringMouse = ignore;
-    window.electronAPI?.setIgnoreMouseEvents(ignore, { forward: true });
-  }
-}
-
-window.addEventListener('DOMContentLoaded', () => {
-  // Inicialmente ignorar para clics en zonas transparentes
-  setWindowIgnore(true);
-});
-
-// Al mover el cursor, comprobar si está sobre el sprite de la mascota o la burbuja
-window.addEventListener('mousemove', (e) => {
-  if (isDragging) {
-    setWindowIgnore(false);
-    return;
-  }
-
-  const rect = petSprite?.getBoundingClientRect();
-  const overSprite = rect && (
-    e.clientX >= rect.left &&
-    e.clientX <= rect.right &&
-    e.clientY >= rect.top &&
-    e.clientY <= rect.bottom
-  );
-
-  let overBubble = false;
-  if (bubble && !bubble.classList.contains('hidden')) {
-    const bRect = bubble.getBoundingClientRect();
-    overBubble = (
-      e.clientX >= bRect.left &&
-      e.clientX <= bRect.right &&
-      e.clientY >= bRect.top &&
-      e.clientY <= bRect.bottom
-    );
-  }
-
-  if (overSprite || overBubble) {
-    setWindowIgnore(false);
-  } else {
-    setWindowIgnore(true);
-  }
-});
-
-window.addEventListener('mouseleave', () => {
-  if (!isDragging) {
-    setWindowIgnore(true);
-  }
-});
-
 // Menú contextual con clic derecho (opacidad, tablero, cerebro, cerrar sesión, etc.)
+let isOpeningMenu = false;
 function handleContextMenu(e) {
   if (e) {
     e.preventDefault();
     e.stopPropagation();
   }
-  setWindowIgnore(false);
+  if (isOpeningMenu) return;
+  isOpeningMenu = true;
+  setTimeout(() => { isOpeningMenu = false; }, 500);
 
-  const cx = (e && typeof e.clientX === 'number') ? Math.round(e.clientX) : 130;
-  const cy = (e && typeof e.clientY === 'number') ? Math.round(e.clientY) : 114;
-  const sx = (e && typeof e.screenX === 'number') ? Math.round(e.screenX) : null;
-  const sy = (e && typeof e.screenY === 'number') ? Math.round(e.screenY) : null;
-
-  window.electronAPI?.showPetContextMenu({ clientX: cx, clientY: cy, screenX: sx, screenY: sy });
+  window.electronAPI?.showPetContextMenu();
 }
 
 petSprite?.addEventListener('contextmenu', handleContextMenu);
 if (bubble) bubble.addEventListener('contextmenu', handleContextMenu);
 window.addEventListener('contextmenu', handleContextMenu);
-
-// Respaldo para clic derecho en caso de que el sistema operativo no despache contextmenu
-petSprite?.addEventListener('pointerup', (e) => {
-  if (e.button === 2) {
-    handleContextMenu(e);
-  }
-});
 
 // Clic en la mascota: gestionado por triggerClick() en onPointerEnd
 // (El doble clic hacia el tablero ha sido desactivado a petición del usuario)
