@@ -242,6 +242,12 @@ function onLoginSuccess() {
   createTray();
   setupGlobalShortcut();
   setupFullscreenWatcher();
+
+  // Sincronizar datos locales con la nube en segundo plano
+  try {
+    const { syncAllLocalToCloud } = require('./src/sync/syncManager');
+    syncAllLocalToCloud(vaultPath, dataPath).catch(err => console.warn('[sync] syncAllLocalToCloud error:', err.message));
+  } catch (_) {}
 }
 
 // ─── Pet window ────────────────────────────────────────────────────────────────
@@ -1162,11 +1168,21 @@ ipcMain.handle('save-note', async (_e, texto, forcedType = null, contextoPrevio 
     console.error('[save-note] post-processing error:', err);
   }
 
+  // Sincronizar nota en segundo plano con Supabase
+  if (fileInfo?.filePath) {
+    try {
+      const { getNoteByPath } = require('./src/notes/notesManager');
+      const noteData = getNoteByPath(fileInfo.filePath);
+      if (noteData) {
+        const { uploadNote } = require('./src/sync/syncManager');
+        uploadNote(noteData).catch(() => {});
+      }
+    } catch (_) {}
+  }
+
   // Notificar al cerebro, al kanban y a la pizarra
   notifyBrainNotesUpdated();
   notifyCanvasNotesUpdated();
-
-  // (El feedback se muestra directamente en el panel de captura/chat de Notip, no sobre la mascota)
 
   return {
     success:          true,
@@ -1197,10 +1213,18 @@ ipcMain.handle('get-tasks', async (_e, filtro) => {
 });
 
 ipcMain.handle('toggle-task', async (_e, id) => {
-  const { toggleTaskStatus } = require('./src/db/database');
+  const { toggleTaskStatus, getTasks } = require('./src/db/database');
   const res = toggleTaskStatus(id);
   captureWindow?.webContents.send('tasks-updated');
   notifyBoardTasksUpdated();
+  try {
+    const tasks = getTasks('todos');
+    const t = tasks.find(x => x.id === id);
+    if (t) {
+      const { uploadTask } = require('./src/sync/syncManager');
+      uploadTask(t).catch(() => {});
+    }
+  } catch (_) {}
   return res;
 });
 
@@ -1209,6 +1233,10 @@ ipcMain.handle('add-task', async (_e, tarea) => {
   const res = addTask(tarea);
   captureWindow?.webContents.send('tasks-updated');
   notifyBoardTasksUpdated();
+  try {
+    const { uploadTask } = require('./src/sync/syncManager');
+    uploadTask({ ...tarea, id: res?.id }).catch(() => {});
+  } catch (_) {}
   return res;
 });
 
@@ -1221,10 +1249,18 @@ ipcMain.handle('delete-task', async (_e, id) => {
 });
 
 ipcMain.handle('update-task', async (_e, id, campos) => {
-  const { updateTask } = require('./src/db/database');
+  const { updateTask, getTasks } = require('./src/db/database');
   const res = updateTask(id, campos);
   captureWindow?.webContents.send('tasks-updated');
   notifyBoardTasksUpdated();
+  try {
+    const tasks = getTasks('todos');
+    const t = tasks.find(x => x.id === id);
+    if (t) {
+      const { uploadTask } = require('./src/sync/syncManager');
+      uploadTask(t).catch(() => {});
+    }
+  } catch (_) {}
   return res;
 });
 
@@ -1382,6 +1418,12 @@ app.whenReady().then(async () => {
     createTray();
     setupGlobalShortcut();
     setupFullscreenWatcher();
+
+    // Sincronizar datos locales con Supabase en segundo plano
+    try {
+      const { syncAllLocalToCloud } = require('./src/sync/syncManager');
+      syncAllLocalToCloud(vaultPath, dataPath).catch(err => console.warn('[sync] syncAllLocalToCloud error:', err.message));
+    } catch (_) {}
   } else {
     // 🔐 Sin sesión → mostrar pantalla de login
     console.log('[main] Sin sesión — mostrando login');

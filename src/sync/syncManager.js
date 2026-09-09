@@ -274,6 +274,75 @@ async function addCalendarEvent(params) {
   return data;
 }
 
+/**
+ * Sincroniza todas las notas locales (.md) y tareas (SQLite) a Supabase.
+ * Se ejecuta automáticamente al iniciar sesión o abrir la app.
+ */
+async function syncAllLocalToCloud(vaultPath, dataPath) {
+  const sb   = getSupabaseClient();
+  const user = getStoredUser();
+  if (!sb || !user) return { syncedNotes: 0, syncedTasks: 0 };
+
+  console.log('[sync] Sincronizando notas y tareas con Supabase para:', user.email);
+
+  let syncedNotes = 0;
+  let syncedTasks = 0;
+
+  try {
+    // 1. Sincronizar notas del vault
+    const { getAllNotes } = require('../notes/notesManager');
+    const localNotes = getAllNotes(vaultPath);
+    for (const n of localNotes) {
+      const res = await uploadNote(n);
+      if (res) syncedNotes++;
+    }
+
+    // 2. Sincronizar tareas de SQLite
+    const { getTasks } = require('../db/database');
+    const localTasks = getTasks('todos');
+    for (const t of localTasks) {
+      const { data: existing } = await sb.from('tareas')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('titulo', t.titulo)
+        .limit(1);
+
+      if (existing && existing.length > 0) {
+        await sb.from('tareas').update({
+          descripcion:   t.descripcion || null,
+          curso:         t.curso || null,
+          fecha_entrega: t.fecha_entrega || null,
+          hora_entrega:  t.hora_entrega || null,
+          estado:        t.estado || 'pendiente',
+          prioridad:     t.prioridad || 'normal',
+          nota_origen:   t.nota_origen || null,
+        }).eq('id', existing[0].id);
+        syncedTasks++;
+      } else {
+        const { error } = await sb.from('tareas').insert({
+          user_id:        user.id,
+          titulo:         t.titulo,
+          descripcion:    t.descripcion || null,
+          curso:          t.curso || null,
+          fecha_entrega:  t.fecha_entrega || null,
+          hora_entrega:   t.hora_entrega || null,
+          estado:         t.estado || 'pendiente',
+          prioridad:      t.prioridad || 'normal',
+          nota_origen:    t.nota_origen || null,
+          fecha_creacion: t.fecha_creacion || new Date().toISOString()
+        });
+        if (!error) syncedTasks++;
+      }
+    }
+
+    console.log(`[sync] Sincronización completa: ${syncedNotes} notas y ${syncedTasks} tareas sincronizadas con Supabase.`);
+  } catch (err) {
+    console.warn('[sync] Error en syncAllLocalToCloud:', err.message);
+  }
+
+  return { syncedNotes, syncedTasks };
+}
+
 module.exports = {
   uploadTask,
   updateTaskInCloud,
@@ -284,4 +353,6 @@ module.exports = {
   getCredits,
   classifyViaEdgeFunction,
   addCalendarEvent,
+  syncAllLocalToCloud,
 };
+
