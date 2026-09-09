@@ -301,6 +301,9 @@ function createPetWindow() {
 
   petWindow.setAlwaysOnTop(true, 'pop-up-menu');
   try {
+    petWindow.setIgnoreMouseEvents(true, { forward: true });
+  } catch (_) {}
+  try {
     petWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
   } catch (_) {}
 

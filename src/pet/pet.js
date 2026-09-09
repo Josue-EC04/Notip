@@ -17,6 +17,11 @@ petSprite.addEventListener('pointerdown', e => {
   startScreenX = e.screenX;
   startScreenY = e.screenY;
   
+  if (isIgnoringMouse) {
+    isIgnoringMouse = false;
+    window.electronAPI?.setIgnoreMouseEvents(false);
+  }
+
   // Guardar el punto de agarre exacto dentro de la ventana de 260x170
   const cx = (typeof e.clientX === 'number' && Number.isFinite(e.clientX)) ? e.clientX : 130;
   const cy = (typeof e.clientY === 'number' && Number.isFinite(e.clientY)) ? e.clientY : 114;
@@ -57,6 +62,18 @@ function onPointerEnd(e) {
     const movedPool = CREATIVE_MESSAGES.moved;
     showBubble(movedPool[Math.floor(Math.random() * movedPool.length)], 2800);
   }
+
+  // Restaurar el passthrough según si el cursor se mantiene sobre la mascota o no
+  setTimeout(() => {
+    if (!isDragging) {
+      const hovered = petSprite.matches(':hover') || 
+        (bubble && !bubble.classList.contains('hidden') && bubble.matches(':hover'));
+      if (!hovered && !isIgnoringMouse) {
+        isIgnoringMouse = true;
+        window.electronAPI?.setIgnoreMouseEvents(true, { forward: true });
+      }
+    }
+  }, 60);
 }
 
 petSprite.addEventListener('pointerup', onPointerEnd);
@@ -72,6 +89,47 @@ ripple.addEventListener('animationend', () => ripple.classList.remove('active'))
 
 // ── Passthrough para clics fuera del sprite (evita bloquear el escritorio/ventanas) ──
 let isIgnoringMouse = false;
+
+function updateMousePassthrough(e) {
+  if (isDragging) return;
+
+  let isOverInteractive = false;
+  if (e && typeof e.clientX === 'number') {
+    const elem = document.elementFromPoint(e.clientX, e.clientY);
+    if (elem) {
+      const isOverSprite = petSprite && petSprite.contains(elem);
+      const isOverBubble = bubble && !bubble.classList.contains('hidden') && bubble.contains(elem);
+      isOverInteractive = !!(isOverSprite || isOverBubble);
+    }
+  }
+
+  if (isOverInteractive) {
+    if (isIgnoringMouse) {
+      isIgnoringMouse = false;
+      window.electronAPI?.setIgnoreMouseEvents(false);
+    }
+  } else {
+    if (!isIgnoringMouse) {
+      isIgnoringMouse = true;
+      window.electronAPI?.setIgnoreMouseEvents(true, { forward: true });
+    }
+  }
+}
+
+window.addEventListener('mousemove', updateMousePassthrough);
+
+window.addEventListener('mouseleave', () => {
+  if (!isDragging && !isIgnoringMouse) {
+    isIgnoringMouse = true;
+    window.electronAPI?.setIgnoreMouseEvents(true, { forward: true });
+  }
+});
+
+// Activar passthrough por defecto al iniciar
+try {
+  isIgnoringMouse = true;
+  window.electronAPI?.setIgnoreMouseEvents(true, { forward: true });
+} catch (_) {}
 
 // Menú contextual con clic derecho (opacidad, tablero, cerebro, cerrar sesión, etc.)
 let isOpeningMenu = false;
@@ -89,7 +147,6 @@ function handleContextMenu(e) {
 
 petSprite?.addEventListener('contextmenu', handleContextMenu);
 if (bubble) bubble.addEventListener('contextmenu', handleContextMenu);
-window.addEventListener('contextmenu', handleContextMenu);
 
 // Clic en la mascota: gestionado por triggerClick() en onPointerEnd
 // (El doble clic hacia el tablero ha sido desactivado a petición del usuario)
