@@ -1007,6 +1007,14 @@ ipcMain.handle('get-credits', async () => {
   }
 });
 
+let _google = null;
+function getGoogleApi() {
+  if (!_google) {
+    _google = require('googleapis').google;
+  }
+  return _google;
+}
+
 /** Crea un evento en Google Calendar del usuario */
 ipcMain.handle('add-calendar-event', async (_e, params) => {
   try {
@@ -1015,7 +1023,7 @@ ipcMain.handle('add-calendar-event', async (_e, params) => {
       return { error: 'No hay token de Google disponible. Cierra sesión y vuelve a entrar con Google.', needs_reauth: true };
     }
 
-    const { google } = require('googleapis');
+    const google = getGoogleApi();
     const auth = new google.auth.OAuth2();
     auth.setCredentials({ access_token: providerToken });
     const calendar = google.calendar({ version: 'v3', auth });

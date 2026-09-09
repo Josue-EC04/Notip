@@ -573,13 +573,15 @@ function build2DGraph(nodes, edges) {
 
   // Guardar posiciones al arrastrar nodos o estabilizar
   network.on('dragEnd', () => {
-    saveBrainPositions();
+    try { saveBrainPositions(); } catch (_) {}
   });
 
   // Stabilization done → fit view & save positions
   network.on('stabilizationIterationsDone', () => {
-    saveBrainPositions();
-    network.fit({ animation: { duration: 400, easingFunction: 'easeInOutQuad' } });
+    try { saveBrainPositions(); } catch (_) {}
+    try {
+      network.fit({ animation: { duration: 400, easingFunction: 'easeInOutQuad' } });
+    } catch (_) {}
   });
 }
 
@@ -827,17 +829,6 @@ function checkThematicAffinity(termsA, termsB, noteA, noteB) {
   return { match: false, keywords: [] };
 }
 
-// ─── Build nodes & edges ───────────────────────────────────────────────────────
-function buildNodesAndEdges(notes) {
-  const nodes = [];
-  const edges = [];
-  const edgeSet = new Set();
-  const noteTermsMap = new Map();
-
-  notes.forEach(n => {
-    noteTermsMap.set(n.filename, extractNoteTerms(n));
-  });
-
 // ─── Posiciones de Nodos Guardadas (Persistencia) ───────────────────────────
 function getSavedBrainPositions() {
   try {
@@ -857,6 +848,17 @@ function saveBrainPositions() {
     localStorage.setItem('notip_brain_positions', JSON.stringify(merged));
   } catch (_) {}
 }
+
+// ─── Build nodes & edges ───────────────────────────────────────────────────────
+function buildNodesAndEdges(notes) {
+  const nodes = [];
+  const edges = [];
+  const edgeSet = new Set();
+  const noteTermsMap = new Map();
+
+  notes.forEach(n => {
+    noteTermsMap.set(n.filename, extractNoteTerms(n));
+  });
 
   const savedPositions = getSavedBrainPositions();
 
