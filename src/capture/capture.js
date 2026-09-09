@@ -36,6 +36,7 @@ let isSaving          = false;
 let forcedType        = null;
 let toastTimer        = null;
 let activeNoteContext = null; // Contexto de la nota activa para permitir continuar el chat
+let chatHistory       = []; // Historial de mensajes de la sesión activa
 
 // ── Elements: Result Card Actions ─────────────────────────────────────────────
 const btnNewNote          = document.getElementById('btn-new-note');
@@ -132,8 +133,48 @@ async function loadRecentActivity() {
 }
 
 function restoreActiveChat() {
-  // Las sesiones de captura inician siempre limpias para crear notas/tareas nuevas
-  activeNoteContext = null;
+  try {
+    const raw = localStorage.getItem('notip_active_chat');
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed.activeNoteContext) {
+        activeNoteContext = parsed.activeNoteContext;
+        sectionZeroState?.classList.add('hidden');
+        sectionChatStream?.classList.remove('hidden');
+
+        if (chatStreamMessages) chatStreamMessages.innerHTML = '';
+
+        if (Array.isArray(parsed.messages) && parsed.messages.length > 0) {
+          parsed.messages.forEach(m => {
+            if (m.isUser) appendUserMessage(m.text, false);
+            else appendNotipResponse(m.result, false);
+          });
+        } else if (parsed.lastUserText && parsed.lastResult) {
+          appendUserMessage(parsed.lastUserText, false);
+          appendNotipResponse(parsed.lastResult, false);
+        }
+
+        btnSaveText.textContent = 'Enviar al chat';
+        input.placeholder = '¿Deseas agregar más detalles o cambiar algo?';
+        hintLabel.textContent = 'En conversación con Notip';
+        if (btnOpenBoardAction && parsed.activeNoteContext.tipo === 'tarea') {
+          btnOpenBoardAction.classList.remove('hidden');
+        }
+      }
+    }
+
+    // Si no hay chat activo pero sí un borrador de texto en progreso, restaurarlo
+    if (!activeNoteContext) {
+      const draft = localStorage.getItem('notip_input_draft');
+      if (draft && draft.trim()) {
+        input.value = draft;
+        charCounter.textContent = `${draft.length} / 1000`;
+        btnSave.disabled = false;
+      }
+    }
+  } catch (e) {
+    console.warn('[capture] restoreActiveChat error:', e);
+  }
 }
 
 // ── Chips Selection ───────────────────────────────────────────────────────────
@@ -180,6 +221,11 @@ input.addEventListener('input', () => {
   charCounter.classList.toggle('near-limit', len > 850);
   btnSave.disabled = len === 0 || isSaving;
   
+  // Guardar borrador en progreso
+  if (!activeNoteContext) {
+    localStorage.setItem('notip_input_draft', input.value);
+  }
+
   if (activeNoteContext) {
     btnSaveText.textContent = 'Enviar al chat';
   } else {
@@ -237,9 +283,10 @@ async function handleSave() {
   sectionChatStream?.classList.remove('hidden');
   appendUserMessage(text);
 
-  // 2. Limpiar input para feedback visual instantáneo
+  // Limpiar input y borrador guardado al enviar
   input.value = '';
   charCounter.textContent = '0 / 1000';
+  localStorage.removeItem('notip_input_draft');
 
   // 3. Indicador animado de pensamiento
   appendThinkingRow();
@@ -279,15 +326,6 @@ async function handleSave() {
     taskId:        result.taskId ?? activeNoteContext?.taskId ?? null,
     filePath:      result.filePath ?? activeNoteContext?.filePath ?? null,
   };
-
-  // Persistir en localStorage
-  try {
-    localStorage.setItem('notip_active_chat', JSON.stringify({
-      activeNoteContext,
-      lastResult: result,
-      lastUserText: text,
-    }));
-  } catch {}
 
   setSavingState(false);
   await refreshCounter();
@@ -340,7 +378,11 @@ async function handleSave() {
 
 function resetToNewNote() {
   activeNoteContext = null;
-  try { localStorage.removeItem('notip_active_chat'); } catch {}
+  chatHistory = [];
+  try {
+    localStorage.removeItem('notip_active_chat');
+    localStorage.removeItem('notip_input_draft');
+  } catch {}
   hideResult();
   input.value = '';
   charCounter.textContent = '0 / 1000';
@@ -360,14 +402,8 @@ function handleClose() {
   hideToast();
   hideAiBar();
   setSavingState(false);
-  activeNoteContext = null;
-  try { localStorage.removeItem('notip_active_chat'); } catch {}
-  hideResult();
-  input.value = '';
-  charCounter.textContent = '0 / 1000';
-  input.placeholder = 'Escribe una tarea, idea o apunte rápido...';
-  btnSaveText.textContent = 'Guardar';
-  if (btnOpenBoardAction) btnOpenBoardAction.classList.add('hidden');
+
+  // NOTA: No borramos activeNoteContext ni el chat para permitir al usuario continuar su nota al reabrir el panel
 
   const panel = document.getElementById('panel');
   if (panel) {
@@ -428,16 +464,30 @@ function removeThinkingRow() {
   if (row) row.remove();
 }
 
-function appendUserMessage(text) {
+function saveChatToStorage() {
+  try {
+    localStorage.setItem('notip_active_chat', JSON.stringify({
+      activeNoteContext,
+      messages: chatHistory,
+    }));
+  } catch {}
+}
+
+function appendUserMessage(text, save = true) {
   if (!chatStreamMessages) return;
   const row = document.createElement('div');
   row.className = 'chat-row-user';
   row.innerHTML = `<div class="chat-bubble-user">${escapeHtml(text)}</div>`;
   chatStreamMessages.appendChild(row);
   chatStreamMessages.scrollTop = chatStreamMessages.scrollHeight;
+
+  if (save) {
+    chatHistory.push({ isUser: true, text });
+    saveChatToStorage();
+  }
 }
 
-function appendNotipResponse(result) {
+function appendNotipResponse(result, save = true) {
   if (!chatStreamMessages) return;
   const tipo = result.tipo ?? 'nota';
   const labels = { tarea: 'Tarea', idea: 'Idea', nota: 'Nota', sin_clasificar: 'Nota' };
@@ -463,12 +513,36 @@ function appendNotipResponse(result) {
     metaTagsHtml += `<span class="res-meta-pill tag-prio tag-prio-${result.prioridad}"><span class="prio-indicator-dot"></span>${result.prioridad.toUpperCase()}</span>`;
   }
 
+  // Si es tarea o tiene fecha de entrega, mostrar botón para sincronizar con Google Calendar
+  const isTaskOrCalendar = (result.tipo === 'tarea' || Boolean(result.fecha_entrega));
+  let calendarBoxHtml = '';
+  if (isTaskOrCalendar) {
+    const dLabel = result.fecha_entrega ? formatShortDate(result.fecha_entrega) : 'Fecha pendiente';
+    const tLabel = result.hora_entrega ? ` · ${result.hora_entrega}` : '';
+    calendarBoxHtml = `
+      <div class="calendar-action-box">
+        <div class="calendar-action-info">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+            <line x1="16" y1="2" x2="16" y2="6"></line>
+            <line x1="8" y1="2" x2="8" y2="6"></line>
+            <line x1="3" y1="10" x2="21" y2="10"></line>
+          </svg>
+          <span>${escapeHtml(dLabel + tLabel)}</span>
+        </div>
+        <button class="btn-add-calendar" type="button">
+          📅 Agregar a Google Calendar
+        </button>
+      </div>
+    `;
+  }
+
   row.innerHTML = `
     <div class="claude-response-hub">
       <div class="claude-hub-header">
-        <div class="notip-avatar-badge" title="Claude AI"></div>
+        <div class="notip-avatar-badge" title="Notip AI"></div>
         <div class="claude-hub-title-wrap">
-          <span class="claude-hub-name">Claude AI</span>
+          <span class="claude-hub-name">Notip AI</span>
           <span class="claude-hub-sub">Respuesta & Análisis</span>
         </div>
       </div>
@@ -476,7 +550,7 @@ function appendNotipResponse(result) {
       <div class="claude-tip-card">
         <div class="tip-card-badge">
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
-          <span>Tip de Claude</span>
+          <span>Tip de Notip</span>
         </div>
         <div class="tip-card-content">${escapeHtml(feedbackText)}</div>
       </div>
@@ -487,12 +561,57 @@ function appendNotipResponse(result) {
           <span class="chat-card-title">${escapeHtml(result.titulo ?? result.texto_reescrito ?? 'Sin título')}</span>
         </div>
         ${metaTagsHtml ? `<div class="card-result-pills">${metaTagsHtml}</div>` : ''}
+        ${calendarBoxHtml}
       </div>
     </div>
   `;
 
+  // Listener del botón de Google Calendar
+  const btnCal = row.querySelector('.btn-add-calendar');
+  if (btnCal) {
+    btnCal.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      btnCal.disabled = true;
+      btnCal.textContent = 'Agregando a Google...';
+      try {
+        const calRes = await window.electronAPI.addCalendarEvent({
+          titulo: result.titulo || result.texto_reescrito,
+          descripcion: result.descripcion || result.mensaje_feedback,
+          fecha_entrega: result.fecha_entrega,
+          hora_entrega: result.hora_entrega,
+        });
+
+        if (calRes?.success) {
+          btnCal.innerHTML = '✓ En tu Google Calendar';
+          btnCal.classList.add('calendar-success');
+          showToast('✓ Evento sincronizado en Google Calendar');
+          if (calRes.htmlLink) {
+            btnCal.onclick = (ev) => {
+              ev.stopPropagation();
+              window.electronAPI.openExternal(calRes.htmlLink);
+            };
+            btnCal.title = 'Abrir en Google Calendar web';
+          }
+        } else {
+          btnCal.disabled = false;
+          btnCal.textContent = 'Reintentar Calendar';
+          showToast(calRes?.error || 'No se pudo agregar a Google Calendar', true);
+        }
+      } catch (err) {
+        btnCal.disabled = false;
+        btnCal.textContent = 'Reintentar Calendar';
+        showToast('Error al conectar con Google Calendar', true);
+      }
+    });
+  }
+
   chatStreamMessages.appendChild(row);
   chatStreamMessages.scrollTop = chatStreamMessages.scrollHeight;
+
+  if (save) {
+    chatHistory.push({ isUser: false, result });
+    saveChatToStorage();
+  }
 }
 
 function showResult(result, userText = '') {

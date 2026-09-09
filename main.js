@@ -995,15 +995,61 @@ ipcMain.handle('add-calendar-event', async (_e, params) => {
   try {
     const providerToken = currentProviderToken || store.get('notip-provider-token');
     if (!providerToken) {
-      return { error: 'No hay token de Google disponible. Vuelve a iniciar sesión.', needs_reauth: true };
+      return { error: 'No hay token de Google disponible. Cierra sesión y vuelve a entrar con Google.', needs_reauth: true };
     }
 
-    const { addCalendarEvent } = require('./src/sync/syncManager');
-    const result = await addCalendarEvent({ ...params, provider_token: providerToken });
-    return result;
+    const { google } = require('googleapis');
+    const auth = new google.auth.OAuth2();
+    auth.setCredentials({ access_token: providerToken });
+    const calendar = google.calendar({ version: 'v3', auth });
+
+    const { titulo, descripcion, fecha_entrega, hora_entrega } = params;
+
+    let startDateTime = null;
+    let endDateTime = null;
+
+    if (fecha_entrega && hora_entrega) {
+      const horaClean = hora_entrega.includes(':') ? hora_entrega : `${hora_entrega}:00`;
+      const [h, m] = horaClean.split(':').map(Number);
+      const d = new Date(fecha_entrega + 'T00:00:00');
+      d.setHours(isNaN(h) ? 10 : h, isNaN(m) ? 0 : m, 0, 0);
+      const dEnd = new Date(d.getTime() + 60 * 60 * 1000);
+      startDateTime = d.toISOString();
+      endDateTime = dEnd.toISOString();
+    }
+
+    const eventBody = {
+      summary: titulo || 'Tarea de Notip',
+      description: descripcion || 'Creado automáticamente desde Notip',
+    };
+
+    if (startDateTime && endDateTime) {
+      eventBody.start = { dateTime: startDateTime };
+      eventBody.end = { dateTime: endDateTime };
+    } else if (fecha_entrega) {
+      eventBody.start = { date: fecha_entrega };
+      eventBody.end = { date: fecha_entrega };
+    } else {
+      const today = new Date().toISOString().split('T')[0];
+      eventBody.start = { date: today };
+      eventBody.end = { date: today };
+    }
+
+    const res = await calendar.events.insert({
+      calendarId: 'primary',
+      requestBody: eventBody,
+    });
+
+    console.log('[calendar] Evento creado con éxito en Google Calendar:', res.data.id);
+    return { success: true, eventId: res.data.id, htmlLink: res.data.htmlLink };
   } catch (err) {
+    console.error('[calendar] Error creando evento:', err);
     return { error: err.message };
   }
+});
+
+ipcMain.handle('open-external', (_e, url) => {
+  if (url) shell.openExternal(url);
 });
 
 ipcMain.on('show-pet-menu', () => {
@@ -1140,7 +1186,7 @@ ipcMain.handle('save-note', async (_e, texto, forcedType = null, contextoPrevio 
   texto = texto.trim();
 
   const { saveRawNote, saveClassifiedNote } = require('./src/notes/notesManager');
-  const { clasificarConReintentos, tieneApiKey } = require('./src/ai/classifier');
+  const { clasificarConReintentos, tieneApiKey, localFallbackClassifier } = require('./src/ai/classifier');
 
   // Si no hay contexto previo, guardamos archivo crudo inmediatamente
   let rawResult = null;
@@ -1152,33 +1198,29 @@ ipcMain.handle('save-note', async (_e, texto, forcedType = null, contextoPrevio 
     }
   }
 
-  // Sin API key → retornar guardado crudo
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!tieneApiKey(apiKey)) {
-    return { success: true, classified: false, tipo: 'sin_clasificar', titulo: rawResult?.filename, sinApiKey: true };
-  }
-
   // Notificar estado "pensando"
   petWindow?.webContents.send('set-thinking', true);
   captureWindow?.webContents.send('ai-thinking');
 
-  let clasificacion;
-  try {
-    const { getAllNotes } = require('./src/notes/notesManager');
-    const existingVaultNotes = getAllNotes(vaultPath).map(n => ({
-      filename: n.filename,
-      titulo: n.titulo || n.filename,
-      tipo: n.tipo,
-      tags: n.tags || [],
-    }));
-    clasificacion = await clasificarConReintentos(texto, apiKey, forcedType, contextoPrevio, existingVaultNotes);
-  } catch (err) {
-    petWindow?.webContents.send('set-thinking', false);
-    return {
-      success: true, classified: false,
-      tipo: 'sin_clasificar', titulo: rawResult?.filename,
-      errorIa: true, errorMsg: getErrorMsg(err),
-    };
+  let clasificacion = null;
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+
+  if (tieneApiKey(apiKey)) {
+    try {
+      const { getAllNotes } = require('./src/notes/notesManager');
+      const existingVaultNotes = getAllNotes(vaultPath).map(n => ({
+        filename: n.filename,
+        titulo: n.titulo || n.filename,
+        tipo: n.tipo,
+        tags: n.tags || [],
+      }));
+      clasificacion = await clasificarConReintentos(texto, apiKey, forcedType, contextoPrevio, existingVaultNotes);
+    } catch (err) {
+      console.warn('[save-note] IA falló (' + err.message + '). Usando analizador inteligente local.');
+      clasificacion = localFallbackClassifier(texto, forcedType, contextoPrevio);
+    }
+  } else {
+    clasificacion = localFallbackClassifier(texto, forcedType, contextoPrevio);
   }
 
   petWindow?.webContents.send('set-thinking', false);

@@ -254,12 +254,104 @@ Si no hay notas con relación directa, retorna { "conexiones": [] }.`;
 }
 
 /**
- * Detecta si hay una API key real configurada.
- * @param {string} [apiKey]
- * @returns {boolean}
+ * Clasificador local inteligente por reglas/heurística.
+ * Se activa como respaldo si la API de Claude no responde, hay error de autenticación (401),
+ * no hay conexión o no hay API key configurada.
  */
-function tieneApiKey(apiKey) {
-  return !!(apiKey && apiKey.trim() && apiKey !== 'tu_api_key_aqui');
+function localFallbackClassifier(texto, forcedType = null, contextoPrevio = null) {
+  const lower = texto.toLowerCase();
+  
+  // 1. Detectar tipo
+  let tipo = forcedType || contextoPrevio?.tipo || 'nota';
+  if (!forcedType) {
+    if (
+      lower.includes('clase') || lower.includes('examen') || lower.includes('tarea') ||
+      lower.includes('hacer') || lower.includes('comprar') || lower.includes('entregar') ||
+      lower.includes('reunión') || lower.includes('reunion') || lower.includes('mañana') ||
+      lower.includes('hoy') || lower.includes('tengo') || lower.includes('recordar') ||
+      lower.includes('estudiar')
+    ) {
+      tipo = 'tarea';
+    } else if (lower.includes('idea') || lower.includes('proyecto') || lower.includes('crear') || lower.includes('app')) {
+      tipo = 'idea';
+    }
+  }
+
+  // 2. Extraer fecha relativa
+  let fecha_entrega = contextoPrevio?.fecha_entrega || null;
+  const now = new Date();
+  if (lower.includes('mañana') || lower.includes('manana')) {
+    const d = new Date(now);
+    d.setDate(d.getDate() + 1);
+    fecha_entrega = d.toISOString().split('T')[0];
+  } else if (lower.includes('hoy')) {
+    fecha_entrega = now.toISOString().split('T')[0];
+  } else if (lower.includes('pasado mañana') || lower.includes('pasado manana')) {
+    const d = new Date(now);
+    d.setDate(d.getDate() + 2);
+    fecha_entrega = d.toISOString().split('T')[0];
+  } else if (lower.includes('viernes')) {
+    const d = new Date(now);
+    const day = d.getDay();
+    const diff = (5 - day + 7) % 7 || 7;
+    d.setDate(d.getDate() + diff);
+    fecha_entrega = d.toISOString().split('T')[0];
+  } else if (lower.includes('lunes')) {
+    const d = new Date(now);
+    const day = d.getDay();
+    const diff = (1 - day + 7) % 7 || 7;
+    d.setDate(d.getDate() + diff);
+    fecha_entrega = d.toISOString().split('T')[0];
+  }
+
+  // 3. Extraer hora (ej. "a las 11 am", "11:00", "3 pm", "14:30")
+  let hora_entrega = contextoPrevio?.hora_entrega || null;
+  const horaMatch = texto.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i);
+  if (horaMatch && (lower.includes('a las') || lower.includes('las') || lower.includes('am') || lower.includes('pm') || lower.includes(':'))) {
+    let h = parseInt(horaMatch[1], 10);
+    const m = horaMatch[2] ? horaMatch[2] : '00';
+    const ampm = horaMatch[3] ? horaMatch[3].toLowerCase() : null;
+    if (ampm === 'pm' && h < 12) h += 12;
+    if (ampm === 'am' && h === 12) h = 0;
+    hora_entrega = `${String(h).padStart(2, '0')}:${m}`;
+  }
+
+  // 4. Extraer curso
+  let curso = contextoPrevio?.curso || null;
+  if (lower.includes('inteligencia financiera')) curso = 'Inteligencia Financiera';
+  else if (lower.includes('redes')) curso = 'Redes';
+  else if (lower.includes('calculo') || lower.includes('cálculo')) curso = 'Cálculo';
+  else if (lower.includes('fisica') || lower.includes('física')) curso = 'Física';
+  else if (lower.includes('sistemas')) curso = 'Ing. Sistemas';
+
+  // 5. Título corto
+  const palabras = texto.split(/\s+/).slice(0, 6).join(' ');
+  const titulo_corto = palabras.charAt(0).toUpperCase() + palabras.slice(1);
+
+  // 6. Mensaje de feedback
+  let feedback = `Anotado como ${tipo.toUpperCase()}.`;
+  if (fecha_entrega && hora_entrega) {
+    feedback = `Tarea programada para el ${fecha_entrega} a las ${hora_entrega}. ¡Puedes sincronizarla con tu Google Calendar!`;
+  } else if (fecha_entrega) {
+    feedback = `Tarea programada para el ${fecha_entrega}.`;
+  }
+
+  return {
+    tipo,
+    texto_reescrito: texto,
+    titulo_corto,
+    descripcion: texto,
+    curso,
+    fecha_entrega,
+    hora_entrega,
+    prioridad: (lower.includes('urgente') || lower.includes('hoy')) ? 'alta' : 'normal',
+    mensaje_feedback: feedback,
+    es_modificacion_de_anterior: Boolean(contextoPrevio),
+    conexiones_sugeridas: [],
+    tags: [tipo],
+    error_clasificacion: false,
+    usando_fallback_local: true,
+  };
 }
 
-module.exports = { clasificarConReintentos, descubrirConexionesGlobales, tieneApiKey };
+module.exports = { clasificarConReintentos, descubrirConexionesGlobales, tieneApiKey, localFallbackClassifier };

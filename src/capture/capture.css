@@ -910,6 +910,60 @@ html, body {
   display: inline-block;
 }
 
+/* Google Calendar Box inside Chat Card */
+.calendar-action-box {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 6px 9px;
+  background: #FFFFFF;
+  border: 1px solid #E2D9CC;
+  border-radius: 6px;
+}
+
+.calendar-action-info {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10.5px;
+  font-family: var(--font-mono);
+  color: var(--text-dim);
+}
+
+.calendar-action-info svg {
+  color: #2563EB;
+}
+
+.btn-add-calendar {
+  background: #F0F5FF;
+  border: 1px solid #BFDBFE;
+  color: #1D4ED8;
+  font-size: 10.5px;
+  font-weight: 600;
+  padding: 4px 9px;
+  border-radius: 5px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  transition: all 0.15s ease;
+}
+
+.btn-add-calendar:hover {
+  background: #DBEAFE;
+  border-color: #93C5FD;
+  color: #1E40AF;
+}
+
+.btn-add-calendar.calendar-success {
+  background: #ECFDF5;
+  border-color: #A7F3D0;
+  color: #047857;
+  cursor: pointer;
+}
+
 .chat-stream-footer {
   display: flex;
   align-items: center;

@@ -62,6 +62,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // ─── Google Calendar v2 ───────────────────────────────────────────────────────
   /** Crea un evento en el Google Calendar del usuario */
   addCalendarEvent: (params)                   => ipcRenderer.invoke('add-calendar-event', params),
+  /** Abre un link externo en el navegador predeterminado */
+  openExternal:     (url)                      => ipcRenderer.invoke('open-external', url),
 
   // Events from main → renderer
   on: (channel, callback) => {
