@@ -897,8 +897,8 @@ ipcMain.on('show-pet-menu', () => {
     { type: 'separator' },
     { label: 'Salir de Notip', click: () => app.exit(0) },
   ]);
-
-  menu.popup({ window: petWindow });
+  console.log('[main] Desplegando menú contextual de la mascota');
+  menu.popup();
 });
 
 // ─── Auth IPC (v2) ─────────────────────────────────────────────────────────────

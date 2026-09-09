@@ -71,34 +71,76 @@ function triggerClick() {
 ripple.addEventListener('animationend', () => ripple.classList.remove('active'));
 
 // ── Passthrough para clics fuera del sprite (evita bloquear el escritorio/ventanas) ──
+let isIgnoringMouse = false;
+
+function setWindowIgnore(ignore) {
+  if (isIgnoringMouse !== ignore) {
+    isIgnoringMouse = ignore;
+    window.electronAPI?.setIgnoreMouseEvents(ignore, { forward: true });
+  }
+}
+
 window.addEventListener('DOMContentLoaded', () => {
-  window.electronAPI?.setIgnoreMouseEvents(true, { forward: true });
+  // Inicialmente ignorar para clics en zonas transparentes
+  setWindowIgnore(true);
 });
 
-petSprite.addEventListener('mouseenter', () => {
-  window.electronAPI?.setIgnoreMouseEvents(false);
-});
-petSprite.addEventListener('mouseleave', () => {
-  if (!isDragging) {
-    window.electronAPI?.setIgnoreMouseEvents(true, { forward: true });
+// Al mover el cursor, comprobar si está sobre el sprite de la mascota o la burbuja
+window.addEventListener('mousemove', (e) => {
+  if (isDragging) {
+    setWindowIgnore(false);
+    return;
+  }
+
+  const rect = petSprite?.getBoundingClientRect();
+  const overSprite = rect && (
+    e.clientX >= rect.left &&
+    e.clientX <= rect.right &&
+    e.clientY >= rect.top &&
+    e.clientY <= rect.bottom
+  );
+
+  let overBubble = false;
+  if (bubble && !bubble.classList.contains('hidden')) {
+    const bRect = bubble.getBoundingClientRect();
+    overBubble = (
+      e.clientX >= bRect.left &&
+      e.clientX <= bRect.right &&
+      e.clientY >= bRect.top &&
+      e.clientY <= bRect.bottom
+    );
+  }
+
+  if (overSprite || overBubble) {
+    setWindowIgnore(false);
+  } else {
+    setWindowIgnore(true);
   }
 });
 
-if (bubble) {
-  bubble.addEventListener('mouseenter', () => {
-    window.electronAPI?.setIgnoreMouseEvents(false);
-  });
-  bubble.addEventListener('mouseleave', () => {
-    if (!isDragging) {
-      window.electronAPI?.setIgnoreMouseEvents(true, { forward: true });
-    }
-  });
+window.addEventListener('mouseleave', () => {
+  if (!isDragging) {
+    setWindowIgnore(true);
+  }
+});
+
+// Menú contextual con clic derecho (opacidad, tablero, cerebro, cerrar sesión, etc.)
+function handleContextMenu(e) {
+  e.preventDefault();
+  e.stopPropagation();
+  setWindowIgnore(false);
+  window.electronAPI?.showPetContextMenu();
 }
 
-// Right-click → context menu (opacity, board, brain, logout, etc.)
-window.addEventListener('contextmenu', (e) => {
-  e.preventDefault();
-  window.electronAPI.showPetContextMenu();
+petSprite?.addEventListener('contextmenu', handleContextMenu);
+if (bubble) bubble.addEventListener('contextmenu', handleContextMenu);
+window.addEventListener('contextmenu', handleContextMenu);
+
+// Respaldo para clic derecho en caso de que el sistema operativo no despache contextmenu
+petSprite?.addEventListener('pointerup', (e) => {
+  if (e.button === 2) {
+    handleContextMenu(e);
+  }
 });
 
 // Clic en la mascota: gestionado por triggerClick() en onPointerEnd
