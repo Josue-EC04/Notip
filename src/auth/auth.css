@@ -161,7 +161,8 @@ html, body {
   width: 72px;
   height: 72px;
   object-fit: contain;
-  object-position: top;
+  object-position: center;
+  border-radius: 16px;
   image-rendering: -webkit-optimize-contrast;
   animation: mascot-float 3s ease-in-out infinite;
   position: relative;
