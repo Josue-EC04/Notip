@@ -6,8 +6,52 @@
   "scripts": {
     "start": "electron .",
     "dev": "electron . --enable-logging",
+    "dist": "electron-builder --win",
+    "pack": "electron-builder --win --dir",
     "shortcut": "node scratch/build_clean_icon.js",
     "build:icon": "node scratch/build_clean_icon.js"
+  },
+  "build": {
+    "appId": "com.notip.app",
+    "productName": "Notip",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "**/*",
+      "!dist",
+      "!scratch",
+      "!vault/*",
+      "!.git"
+    ],
+    "extraResources": [
+      {
+        "from": ".env",
+        "to": ".env"
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        },
+        {
+          "target": "portable",
+          "arch": ["x64"]
+        }
+      ],
+      "icon": "src/assets/icon.ico"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Notip",
+      "runAfterFinish": true
+    }
   },
   "keywords": [
     "electron",
@@ -33,6 +77,7 @@
   },
   "devDependencies": {
     "electron": "^32.0.0",
+    "electron-builder": "^26.15.3",
     "png-to-ico": "^3.0.2"
   }
 }

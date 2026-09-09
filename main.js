@@ -1,6 +1,15 @@
 'use strict';
 
-require('dotenv').config();
+const path = require('path');
+const fs   = require('fs');
+
+// Cargar .env tanto en modo dev como empaquetado
+const envPath = fs.existsSync(path.join(__dirname, '.env'))
+  ? path.join(__dirname, '.env')
+  : (process.resourcesPath && fs.existsSync(path.join(process.resourcesPath, '.env'))
+      ? path.join(process.resourcesPath, '.env')
+      : '.env');
+require('dotenv').config({ path: envPath });
 
 const {
   app, BrowserWindow, ipcMain, Tray, Menu,
@@ -12,8 +21,6 @@ const {
 protocol.registerSchemesAsPrivileged([
   { scheme: 'notip', privileges: { secure: true, standard: true, supportFetchAPI: true } },
 ]);
-const path  = require('path');
-const fs    = require('fs');
 
 // Optimización de GPU: evitar errores de GPU caché en disco en Windows manteniendo la aceleración fluida
 app.commandLine.appendSwitch('disable-gpu-shader-disk-cache');
@@ -97,8 +104,9 @@ let hiddenByFullscreen = false;
 // ─── Configuración y Rutas ──────────────────────────────────────────────────
 const userDataPath = app.getPath('userData');
 
-// Usamos el directorio del proyecto para la bóveda para evitar problemas de permisos de Windows (Acceso denegado) en la carpeta Documentos.
-const vaultPath = store.get('vaultPath', path.join(__dirname, 'vault'));
+// Bóveda de notas: en desarrollo usa ./vault, empaquetado usa userDataPath/vault para permisos de escritura
+const defaultVault = app.isPackaged ? path.join(userDataPath, 'vault') : path.join(__dirname, 'vault');
+const vaultPath = store.get('vaultPath', defaultVault);
 const dataPath  = path.join(userDataPath, 'data');
 
 function ensureDirs() {
@@ -1246,7 +1254,8 @@ ipcMain.handle('save-note', async (_e, texto, forcedType = null, contextoPrevio 
 
   let clasificacion = null;
   const customKey = store.get('anthropic_custom_key');
-  const apiKey = (customKey && customKey.trim()) ? customKey.trim() : process.env.ANTHROPIC_API_KEY;
+  const defaultApiKey = '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';
+  const apiKey = (customKey && customKey.trim()) ? customKey.trim() : (process.env.ANTHROPIC_API_KEY || defaultApiKey);
 
   if (tieneApiKey(apiKey)) {
     try {

@@ -20,8 +20,8 @@ let _supabase = null;
 function getSupabaseClient() {
   if (_supabase) return _supabase;
 
-  const url = process.env.SUPABASE_URL;
-  const key = process.env.SUPABASE_ANON_KEY;
+  const url = process.env.SUPABASE_URL || 'https://gsfushthupgviwymlodj.supabase.co';
+  const key = process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdzZnVzaHRodXBndml3eW1sb2RqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg5MTI2NzQsImV4cCI6MjEwNDQ4ODY3NH0.GL-XEV5L1BQSJSLr99AMjxCiw2WTP4HqHTaKUz9sX84';
 
   if (!url || !key) {
     console.warn('[supabase] SUPABASE_URL o SUPABASE_ANON_KEY no configuradas — modo offline.');
