@@ -4,6 +4,8 @@
 
 Notip es una aplicación de escritorio moderna construida sobre **Electron** que combina captura rápida con IA (Claude), un tablero Kanban intuitivo, una pizarra de notas interactiva y un cerebro neuronal visual para conectar todas tus ideas.
 
+> 📚 **¿Desarrollando con Codex o IA?** Consulta el documento maestro de arquitectura y contexto del producto en [CONTEXTO_Y_ARQUITECTURA.md](CONTEXTO_Y_ARQUITECTURA.md).
+
 ---
 
 ## ✨ Características Principales
