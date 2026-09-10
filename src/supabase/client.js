@@ -60,19 +60,13 @@ function getSupabaseClient() {
 }
 
 /**
- * Obtiene la sesión activa del store (sin llamada a red).
+ * Obtiene la sesión activa del store (sin llamada a red y sin borrarla).
  */
 function getStoredSession() {
   try {
     const raw = store.get('sb-session');
     if (!raw) return null;
-    const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
-    // Verificar que no haya expirado
-    if (parsed?.expires_at && parsed.expires_at * 1000 < Date.now()) {
-      store.delete('sb-session');
-      return null;
-    }
-    return parsed;
+    return typeof raw === 'string' ? JSON.parse(raw) : raw;
   } catch { return null; }
 }
 
@@ -82,6 +76,65 @@ function getStoredSession() {
 function getStoredUser() {
   const session = getStoredSession();
   return session?.user ?? null;
+}
+
+/**
+ * Restaura y renueva la sesión al iniciar la aplicación.
+ * Si el access_token expiró, utiliza el refresh_token para renovarlo con Supabase.
+ * Si está offline, mantiene la sesión local para que el usuario pueda seguir trabajando.
+ */
+async function restoreOrRefreshSession() {
+  const session = getStoredSession();
+  if (!session || !session.user) return null;
+
+  const sb = getSupabaseClient();
+  if (!sb) return session;
+
+  const now = Date.now();
+  const expiresAt = session.expires_at ? session.expires_at * 1000 : 0;
+  // Margen de 2 minutos antes de la expiración para renovar con tiempo
+  const isExpiredOrSoon = expiresAt <= (now + 120000);
+
+  if (!isExpiredOrSoon && session.access_token) {
+    try {
+      await sb.auth.setSession({
+        access_token: session.access_token,
+        refresh_token: session.refresh_token || '',
+      });
+    } catch (_) {}
+    return session;
+  }
+
+  // Si ha expirado pero tenemos refresh_token, renovar con Supabase
+  if (session.refresh_token) {
+    try {
+      console.log('[auth] Renovando sesión con refresh_token...');
+      const { data, error } = await sb.auth.refreshSession({
+        refresh_token: session.refresh_token,
+      });
+
+      if (!error && data?.session) {
+        console.log('[auth] Sesión renovada con éxito para:', data.session.user?.email);
+        storeSession(data.session);
+        return data.session;
+      }
+
+      if (error) {
+        console.warn('[auth] Aviso al refrescar token:', error.message);
+        // Si el token fue revocado definitivamente en el servidor:
+        if (error.message.includes('Invalid Refresh Token') || error.message.includes('Already Used')) {
+          console.warn('[auth] Refresh token inválido en el servidor. Requiere nuevo login.');
+          storeSession(null);
+          return null;
+        }
+      }
+    } catch (err) {
+      console.warn('[auth] Error de red al refrescar (modo offline):', err.message);
+    }
+  }
+
+  // Si falló por falta de conexión o red temporal, conservamos la sesión local para modo offline
+  return session;
 }
 
 /**
@@ -112,6 +165,7 @@ module.exports = {
   getSupabaseClient,
   getStoredSession,
   getStoredUser,
+  restoreOrRefreshSession,
   storeSession,
   signOut,
 };

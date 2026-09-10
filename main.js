@@ -1582,15 +1582,16 @@ app.whenReady().then(async () => {
     return;
   }
 
-  // Verificar si hay una sesión activa de Supabase
-  const { getStoredUser } = require('./src/supabase/client');
-  const user = getStoredUser();
+  // Verificar si hay una sesión activa de Supabase (renovándola con refresh_token si expiró)
+  const { restoreOrRefreshSession, getStoredUser } = require('./src/supabase/client');
+  const session = await restoreOrRefreshSession();
+  const user = session?.user || getStoredUser();
 
   if (user) {
     // ✅ Sesión válida → abrir app directamente
     console.log('[main] Sesión activa para:', user.email);
     // Restaurar provider token de Calendar si existe
-    currentProviderToken = store.get('notip-provider-token') || null;
+    currentProviderToken = session?.provider_token || store.get('notip-provider-token') || null;
     createPetWindow();
     createCaptureWindow();
     createBoardWindow();
