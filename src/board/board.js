@@ -606,7 +606,12 @@ function openAddModal(defaultState = 'pendiente') {
   fieldCurso.value  = '';
   fieldFecha.value  = '';
   if (fieldHora) fieldHora.value = '';
-  fieldEstado.value = defaultState;
+
+  const validState = (typeof defaultState === 'string' && ['pendiente', 'progreso', 'hecho'].includes(defaultState))
+    ? defaultState
+    : 'pendiente';
+  fieldEstado.value = validState;
+
   if (fieldPrioridad) fieldPrioridad.value = 'normal';
   modalOverlay.classList.remove('hidden');
   modalOverlay.style.display = 'flex';
@@ -696,7 +701,7 @@ function setupEvents() {
   btnOpenCanvas?.addEventListener('click', () => window.electronAPI.openCanvas());
 
   // New task button
-  btnAddQuick.addEventListener('click', openAddModal);
+  btnAddQuick.addEventListener('click', () => openAddModal('pendiente'));
 
   // Modal
   modalClose?.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); closeModal(); });

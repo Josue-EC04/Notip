@@ -68,8 +68,12 @@ async function clasificarNota(texto, apiKey, forcedType = null, contextoPrevio =
   const fechaReferencia = `[FECHA ACTUAL DE REFERENCIA: ${hoyStr} (${diaSemana})]`;
 
   let userPrompt = '';
+  const forcedInstruction = (forcedType && ['tarea', 'idea', 'nota'].includes(forcedType))
+    ? `\n[IMPORTANTE: El usuario ha seleccionado explícitamente la categoría "${forcedType}". Clasifícala obligatoriamente como tipo "${forcedType}"]\n`
+    : '';
+
   if (contextoPrevio) {
-    userPrompt = `${fechaReferencia}\n[CONTINUACIÓN DE LA CONVERSACIÓN - NOTA O TAREA PREVIA]
+    userPrompt = `${fechaReferencia}${forcedInstruction}\n[CONTINUACIÓN DE LA CONVERSACIÓN - NOTA O TAREA PREVIA]
 Título previo: "${contextoPrevio.titulo || 'Nota'}" (tipo: ${contextoPrevio.tipo || 'nota'})
 Contenido previo: "${contextoPrevio.texto || ''}"
 ${contextoPrevio.curso ? `Curso: ${contextoPrevio.curso}` : ''}
@@ -93,10 +97,8 @@ INSTRUCCIONES CLAVE:
    - Mantén "es_modificacion_de_anterior": true y responde didácticamente en "mensaje_feedback".
 4. Si el usuario añade más requerimientos a la nota previa:
    - Enriquecer "texto_reescrito" combinando lo anterior con lo nuevo.`;
-  } else if (forcedType && ['tarea', 'idea', 'nota'].includes(forcedType)) {
-    userPrompt = `${fechaReferencia}\n[IMPORTANTE: Clasifica esta entrada obligatoriamente como tipo "${forcedType}"]\n\nTexto:\n${texto}`;
   } else {
-    userPrompt = `${fechaReferencia}\nTexto:\n${texto}`;
+    userPrompt = `${fechaReferencia}${forcedInstruction}\nTexto:\n${texto}`;
   }
 
   // Si hay notas existentes en el vault, adjuntarlas para permitir vincular temas hermanos
@@ -278,23 +280,50 @@ function localFallbackClassifier(texto, forcedType = null, contextoPrevio = null
   const lower = texto.toLowerCase();
   const now = new Date();
 
+  // 0. Detección temprana: ¿es continuación/modificación o un tema nuevo?
+  let esModificacion = false;
+  if (contextoPrevio) {
+    const esComandoModificar = /^(cambia|modifica|corrige|ponle|agrega|pasa|mueve|a\s+las|para\s+el|para\s+la)\b/i.test(texto);
+    const esNuevoTema = /^(examen|parcial|tarea|entrega|informe|clase|reunion|reunión|hackaton|hackathon|comprar|idea|proyecto|recordar)\b/i.test(texto);
+    esModificacion = esComandoModificar || !esNuevoTema;
+  }
+
   // 1. Extraer hora (ej. "a las 6 pm", "8pm", "11:00 am", "18:00")
-  let hora_entrega = contextoPrevio?.hora_entrega || null;
-  const horaRegex = /(?:a\s+las\s+|las\s+|desde\s+las\s+)?(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i;
+  let hora_entrega = esModificacion ? (contextoPrevio?.hora_entrega || null) : null;
+  const horaRegex = /(?:(?:a\s+las|las|desde\s+las)\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?|(\d{1,2}):(\d{2})\s*(am|pm)?|(\d{1,2})\s*(am|pm))/i;
   const horaMatch = texto.match(horaRegex);
-  if (horaMatch && (lower.includes('a las') || lower.includes('las') || lower.includes('am') || lower.includes('pm') || lower.includes(':'))) {
-    let h = parseInt(horaMatch[1], 10);
-    const m = horaMatch[2] ? horaMatch[2] : '00';
-    const ampm = horaMatch[3] ? horaMatch[3].toLowerCase() : null;
-    if (ampm === 'pm' && h < 12) h += 12;
-    if (ampm === 'am' && h === 12) h = 0;
-    if (h >= 0 && h <= 23) {
-      hora_entrega = `${String(h).padStart(2, '0')}:${m}`;
+  if (horaMatch) {
+    let rawH, rawM, rawAmpm;
+    if (horaMatch[1] !== undefined) {
+      rawH = horaMatch[1];
+      rawM = horaMatch[2];
+      rawAmpm = horaMatch[3];
+    } else if (horaMatch[4] !== undefined) {
+      rawH = horaMatch[4];
+      rawM = horaMatch[5];
+      rawAmpm = horaMatch[6];
+    } else if (horaMatch[7] !== undefined) {
+      rawH = horaMatch[7];
+      rawM = null;
+      rawAmpm = horaMatch[8];
+    }
+
+    let h = parseInt(rawH, 10);
+    const m = (rawM !== undefined && rawM !== null) ? parseInt(rawM, 10) : 0;
+    const ampm = rawAmpm ? rawAmpm.toLowerCase() : null;
+
+    if (!isNaN(h) && !isNaN(m) && m >= 0 && m <= 59) {
+      if (ampm === 'pm' && h < 12) h += 12;
+      else if (ampm === 'am' && h === 12) h = 0;
+
+      if (h >= 0 && h <= 23) {
+        hora_entrega = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+      }
     }
   }
 
   // 2. Extraer fecha relativa (soporta todos los días de la semana)
-  let fecha_entrega = contextoPrevio?.fecha_entrega || null;
+  let fecha_entrega = esModificacion ? (contextoPrevio?.fecha_entrega || null) : null;
   const diasSemana = {
     'domingo': 0, 'lunes': 1, 'martes': 2,
     'miercoles': 3, 'miércoles': 3,
@@ -326,7 +355,7 @@ function localFallbackClassifier(texto, forcedType = null, contextoPrevio = null
   }
 
   // 3. Extraer curso o materia académica
-  let curso = contextoPrevio?.curso || null;
+  let curso = esModificacion ? (contextoPrevio?.curso || null) : null;
   if (lower.includes('inteligencia financiera')) curso = 'Inteligencia Financiera';
   else if (lower.includes('redes') || lower.includes('fis-redes')) curso = 'Redes';
   else if (lower.includes('calculo') || lower.includes('cálculo')) curso = 'Cálculo';
@@ -337,8 +366,8 @@ function localFallbackClassifier(texto, forcedType = null, contextoPrevio = null
   else if (lower.includes('optimizacion') || lower.includes('optimización')) curso = 'Optimización';
 
   // 4. Detectar tipo
-  let tipo = forcedType || contextoPrevio?.tipo || 'nota';
-  if (!forcedType) {
+  let tipo = forcedType || (esModificacion ? contextoPrevio?.tipo : null) || 'nota';
+  if (!forcedType && !esModificacion) {
     if (
       lower.includes('hackaton') || lower.includes('hackathon') ||
       lower.includes('reunión') || lower.includes('reunion') ||
@@ -355,32 +384,40 @@ function localFallbackClassifier(texto, forcedType = null, contextoPrevio = null
     }
   }
 
-  // 5. Síntesis inteligente del título (limpio y apto para Google Calendar y notas)
+  // 5. Síntesis inteligente del título y contenido
   let titulo_corto = '';
-  if (lower.includes('hackaton') || lower.includes('hackathon')) {
-    titulo_corto = 'Hackatón';
-  } else if (lower.includes('reunion') || lower.includes('reunión')) {
-    titulo_corto = curso ? `Reunión de ${curso}` : 'Reunión de Coordinación';
-  } else if (lower.includes('examen') || lower.includes('parcial')) {
-    titulo_corto = curso ? `Examen de ${curso}` : 'Examen';
-  } else if (lower.includes('entrega') || lower.includes('informe')) {
-    titulo_corto = curso ? `Entrega de ${curso}` : 'Entrega de Informe';
-  } else if (lower.includes('clase')) {
-    titulo_corto = curso ? `Clase de ${curso}` : 'Clase';
-  } else {
-    // Limpieza de muletillas de inicio
-    let limpio = texto
-      .replace(/^(tengo\s+que\s+|tengo\s+una\s+|recordar\s+|inicia\s+una\s+pequeña\s+|inicia\s+|hay\s+)/i, '')
-      .replace(/(?:este\s+)?(lunes|martes|miércoles|miercoles|jueves|viernes|sábado|sabado|domingo|hoy|mañana)/gi, '')
-      .replace(/(?:a\s+las\s+|las\s+)?\d{1,2}(?::\d{2})?\s*(am|pm)?/gi, '')
-      .trim();
+  let texto_reescrito = texto;
+  let descripcion = texto;
 
-    const palabras = limpio.split(/\s+/).filter(Boolean).slice(0, 5).join(' ');
-    if (palabras.length > 2) {
-      titulo_corto = palabras.charAt(0).toUpperCase() + palabras.slice(1);
+  if (esModificacion && contextoPrevio) {
+    titulo_corto = contextoPrevio.titulo || '';
+    texto_reescrito = contextoPrevio.texto ? `${contextoPrevio.texto} (${texto})` : texto;
+    descripcion = contextoPrevio.texto || texto;
+  } else {
+    if (lower.includes('hackaton') || lower.includes('hackathon')) {
+      titulo_corto = 'Hackatón';
+    } else if (lower.includes('reunion') || lower.includes('reunión')) {
+      titulo_corto = curso ? `Reunión de ${curso}` : 'Reunión de Coordinación';
+    } else if (lower.includes('examen') || lower.includes('parcial')) {
+      titulo_corto = curso ? `Examen de ${curso}` : 'Examen';
+    } else if (lower.includes('entrega') || lower.includes('informe')) {
+      titulo_corto = curso ? `Entrega de ${curso}` : 'Entrega de Informe';
+    } else if (lower.includes('clase')) {
+      titulo_corto = curso ? `Clase de ${curso}` : 'Clase';
     } else {
-      const fallbackPalabras = texto.split(/\s+/).slice(0, 5).join(' ');
-      titulo_corto = fallbackPalabras.charAt(0).toUpperCase() + fallbackPalabras.slice(1);
+      let limpio = texto
+        .replace(/^(tengo\s+que\s+|tengo\s+una\s+|recordar\s+|inicia\s+una\s+pequeña\s+|inicia\s+|hay\s+)/i, '')
+        .replace(/(?:este\s+)?(lunes|martes|miércoles|miercoles|jueves|viernes|sábado|sabado|domingo|hoy|mañana)/gi, '')
+        .replace(/(?:a\s+las\s+|las\s+)?\d{1,2}(?::\d{2})?\s*(am|pm)?/gi, '')
+        .trim();
+
+      const palabras = limpio.split(/\s+/).filter(Boolean).slice(0, 5).join(' ');
+      if (palabras.length > 2) {
+        titulo_corto = palabras.charAt(0).toUpperCase() + palabras.slice(1);
+      } else {
+        const fallbackPalabras = texto.split(/\s+/).slice(0, 5).join(' ');
+        titulo_corto = fallbackPalabras.charAt(0).toUpperCase() + fallbackPalabras.slice(1);
+      }
     }
   }
 
@@ -389,7 +426,9 @@ function localFallbackClassifier(texto, forcedType = null, contextoPrevio = null
   const fechaLabel = fecha_entrega ? `el ${fecha_entrega}` : '';
   const horaLabel = hora_entrega ? ` a las ${hora_entrega}` : '';
 
-  if (lower.includes('hackaton') || lower.includes('hackathon')) {
+  if (esModificacion) {
+    feedback = `Nota actualizada correctamente${fechaLabel ? ` para ${fechaLabel}` : ''}${horaLabel ? `${horaLabel}` : ''}.`;
+  } else if (lower.includes('hackaton') || lower.includes('hackathon')) {
     feedback = `¡Hackatón agendada para ${fechaLabel}${horaLabel}! Tip: Coordina previamente los roles de tu equipo y ten preparado el entorno de desarrollo para arrancar con ventaja.`;
   } else if (lower.includes('reunion') || lower.includes('reunión')) {
     feedback = `¡Reunión programada para ${fechaLabel}${horaLabel}! Tip: Ten listos los temas principales o dudas clave para que la sesión sea ágil y productiva.`;
@@ -403,19 +442,11 @@ function localFallbackClassifier(texto, forcedType = null, contextoPrevio = null
     feedback = `Anotado en tu segundo cerebro como ${tipo.toUpperCase()}.`;
   }
 
-  // Detección si es continuación o un tema nuevo
-  let esModificacion = false;
-  if (contextoPrevio) {
-    const esComandoModificar = /^(cambia|modifica|corrige|ponle|agrega|pasa|mueve|a\s+las|para\s+el|para\s+la)/i.test(texto);
-    const esNuevoTema = /^(examen|parcial|tarea|entrega|informe|clase|reunion|reunión|hackaton|hackathon|comprar|idea|proyecto|recordar)\b/i.test(texto);
-    esModificacion = esComandoModificar || !esNuevoTema;
-  }
-
   return {
     tipo,
-    texto_reescrito: texto,
+    texto_reescrito,
     titulo_corto,
-    descripcion: texto,
+    descripcion,
     curso,
     fecha_entrega,
     hora_entrega,
@@ -426,6 +457,7 @@ function localFallbackClassifier(texto, forcedType = null, contextoPrevio = null
     tags: [tipo, ...(curso ? [curso.toLowerCase().replace(/\s+/g, '-')] : [])],
     error_clasificacion: false,
     usando_fallback_local: true,
+    origen: 'local',
   };
 }
 

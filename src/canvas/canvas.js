@@ -722,7 +722,7 @@ async function createNewNoteAt(worldX = null, worldY = null) {
   try {
     const res = await window.electronAPI.saveNote(defaultText, 'idea');
     if (res && res.success) {
-      const filename = res.titulo || res.filePath?.split(/[\\/]/).pop() || `nota_${Date.now()}.md`;
+      const filename = res.filename || res.filePath?.split(/[\\/]/).pop() || `nota_${Date.now()}.md`;
       
       const posX = worldX !== null ? Math.round(worldX - 140) : Math.round((-camera.x + container.clientWidth / 2) / camera.scale - 140);
       const posY = worldY !== null ? Math.round(worldY - 100) : Math.round((-camera.y + container.clientHeight / 2) / camera.scale - 100);

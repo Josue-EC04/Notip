@@ -13,8 +13,21 @@
 
 const { getSupabaseClient, getStoredUser } = require('../supabase/client');
 
+function mapEstadoToCloud(estado) {
+  if (estado === 'progreso') return 'en_progreso';
+  if (['pendiente', 'en_progreso', 'hecho'].includes(estado)) return estado;
+  return 'pendiente';
+}
+
+function mapEstadoFromCloud(estado) {
+  if (estado === 'en_progreso') return 'progreso';
+  if (['pendiente', 'progreso', 'hecho'].includes(estado)) return estado;
+  return 'pendiente';
+}
+
 /**
  * Sube una tarea nueva a Supabase (si hay sesión activa).
+ * Si la tarea ya cuenta con supabase_id, la actualiza para evitar duplicados.
  * No bloquea — si falla, la tarea ya está guardada en SQLite.
  * @param {object} tarea - Objeto tarea tal como se guarda en SQLite
  * @returns {Promise<string|null>} - UUID de Supabase si se subió, null si falló/no hay sesión
@@ -25,18 +38,35 @@ async function uploadTask(tarea) {
   if (!sb || !user) return null;
 
   try {
-    const { data, error } = await sb
-      .from('tareas')
-      .insert({
-        user_id:       user.id,
+    const estadoCloud = mapEstadoToCloud(tarea.estado);
+
+    // Si ya existe en Supabase, actualizar en lugar de crear otra fila
+    if (tarea.supabase_id) {
+      await updateTaskInCloud(tarea.supabase_id, {
         titulo:        tarea.titulo,
         descripcion:   tarea.descripcion || null,
         curso:         tarea.curso || null,
         fecha_entrega: tarea.fecha_entrega || null,
         hora_entrega:  tarea.hora_entrega || null,
-        estado:        tarea.estado || 'pendiente',
+        estado:        estadoCloud,
         prioridad:     tarea.prioridad || 'normal',
         nota_origen:   tarea.nota_origen || null,
+      });
+      return tarea.supabase_id;
+    }
+
+    const { data, error } = await sb
+      .from('tareas')
+      .insert({
+        user_id:        user.id,
+        titulo:         tarea.titulo,
+        descripcion:    tarea.descripcion || null,
+        curso:          tarea.curso || null,
+        fecha_entrega:  tarea.fecha_entrega || null,
+        hora_entrega:   tarea.hora_entrega || null,
+        estado:         estadoCloud,
+        prioridad:      tarea.prioridad || 'normal',
+        nota_origen:    tarea.nota_origen || null,
         fecha_creacion: tarea.fecha_creacion || new Date().toISOString(),
       })
       .select('id')
@@ -46,7 +76,16 @@ async function uploadTask(tarea) {
       console.warn('[sync] uploadTask error:', error.message);
       return null;
     }
-    return data?.id ?? null;
+
+    const newSupabaseId = data?.id ?? null;
+    if (newSupabaseId && tarea.id) {
+      try {
+        const { updateTask } = require('../db/database');
+        updateTask(tarea.id, { supabase_id: newSupabaseId });
+      } catch (_) {}
+    }
+
+    return newSupabaseId;
   } catch (e) {
     console.warn('[sync] uploadTask exception:', e.message);
     return null;
@@ -64,9 +103,13 @@ async function updateTaskInCloud(supabaseId, campos) {
   if (!sb || !user || !supabaseId) return;
 
   try {
+    const payload = { ...campos, updated_at: new Date().toISOString() };
+    if (payload.estado) {
+      payload.estado = mapEstadoToCloud(payload.estado);
+    }
     const { error } = await sb
       .from('tareas')
-      .update({ ...campos, updated_at: new Date().toISOString() })
+      .update(payload)
       .eq('id', supabaseId)
       .eq('user_id', user.id);
     if (error) console.warn('[sync] updateTaskInCloud error:', error.message);
@@ -96,6 +139,26 @@ async function deleteTaskInCloud(supabaseId) {
 }
 
 /**
+ * Elimina una nota de Supabase por filename.
+ */
+async function deleteNoteInCloud(filename) {
+  const sb   = getSupabaseClient();
+  const user = getStoredUser();
+  if (!sb || !user || !filename) return;
+
+  try {
+    const { error } = await sb
+      .from('ideas')
+      .delete()
+      .eq('filename', filename)
+      .eq('user_id', user.id);
+    if (error) console.warn('[sync] deleteNoteInCloud error:', error.message);
+  } catch (e) {
+    console.warn('[sync] deleteNoteInCloud exception:', e.message);
+  }
+}
+
+/**
  * Sube una nota/idea a Supabase.
  */
 async function uploadNote(nota) {
@@ -115,8 +178,8 @@ async function uploadNote(nota) {
         tags:           nota.tags || [],
         prioridad:      nota.prioridad || 'normal',
         conexiones:     nota.conexiones || [],
-        conexiones_ia:  nota.conexiones_ia || [],
-        fecha_creacion: nota.fecha_creacion || new Date().toISOString(),
+        conexiones_ia:  nota.conexiones_ia || nota.conexiones_sugeridas || [],
+        fecha_creacion: nota.fecha_creacion || nota.creado || new Date().toISOString(),
       }, { onConflict: 'user_id,filename' })
       .select('id')
       .single();
@@ -298,40 +361,69 @@ async function syncAllLocalToCloud(vaultPath, dataPath) {
     }
 
     // 2. Sincronizar tareas de SQLite
-    const { getTasks } = require('../db/database');
-    const localTasks = getTasks('todos');
+    const { getTasks, updateTask } = require('../db/database');
+    const localTasks = getTasks('todas');
     for (const t of localTasks) {
-      const { data: existing } = await sb.from('tareas')
-        .select('id')
-        .eq('user_id', user.id)
-        .eq('titulo', t.titulo)
-        .limit(1);
+      const estadoCloud = mapEstadoToCloud(t.estado);
+
+      let existing = null;
+      if (t.supabase_id) {
+        const { data } = await sb.from('tareas')
+          .select('id')
+          .eq('id', t.supabase_id)
+          .eq('user_id', user.id)
+          .limit(1);
+        if (data && data.length > 0) existing = data;
+      }
+
+      if (!existing) {
+        const { data } = await sb.from('tareas')
+          .select('id')
+          .eq('user_id', user.id)
+          .eq('titulo', t.titulo)
+          .limit(1);
+        if (data && data.length > 0) existing = data;
+      }
 
       if (existing && existing.length > 0) {
-        await sb.from('tareas').update({
+        const cloudId = existing[0].id;
+        const { error } = await sb.from('tareas').update({
           descripcion:   t.descripcion || null,
           curso:         t.curso || null,
           fecha_entrega: t.fecha_entrega || null,
           hora_entrega:  t.hora_entrega || null,
-          estado:        t.estado || 'pendiente',
+          estado:        estadoCloud,
           prioridad:     t.prioridad || 'normal',
           nota_origen:   t.nota_origen || null,
-        }).eq('id', existing[0].id);
-        syncedTasks++;
+          updated_at:    new Date().toISOString(),
+        }).eq('id', cloudId);
+
+        if (!error) {
+          syncedTasks++;
+          if (!t.supabase_id && t.id) {
+            updateTask(t.id, { supabase_id: cloudId });
+          }
+        }
       } else {
-        const { error } = await sb.from('tareas').insert({
+        const { data: inserted, error } = await sb.from('tareas').insert({
           user_id:        user.id,
           titulo:         t.titulo,
           descripcion:    t.descripcion || null,
           curso:          t.curso || null,
           fecha_entrega:  t.fecha_entrega || null,
           hora_entrega:   t.hora_entrega || null,
-          estado:         t.estado || 'pendiente',
+          estado:         estadoCloud,
           prioridad:      t.prioridad || 'normal',
           nota_origen:    t.nota_origen || null,
           fecha_creacion: t.fecha_creacion || new Date().toISOString()
-        });
-        if (!error) syncedTasks++;
+        }).select('id').single();
+
+        if (!error) {
+          syncedTasks++;
+          if (inserted?.id && t.id) {
+            updateTask(t.id, { supabase_id: inserted.id });
+          }
+        }
       }
     }
 
@@ -348,11 +440,14 @@ module.exports = {
   updateTaskInCloud,
   deleteTaskInCloud,
   uploadNote,
+  deleteNoteInCloud,
   downloadTasks,
   downloadNotes,
   getCredits,
   classifyViaEdgeFunction,
   addCalendarEvent,
   syncAllLocalToCloud,
+  mapEstadoToCloud,
+  mapEstadoFromCloud,
 };
 

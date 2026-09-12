@@ -15,6 +15,7 @@
 const { spawn }        = require('child_process');
 const { EventEmitter } = require('events');
 const path             = require('path');
+const fs               = require('fs');
 
 class FullscreenWatcher extends EventEmitter {
   constructor() {
@@ -30,7 +31,16 @@ class FullscreenWatcher extends EventEmitter {
     this._stopped = false;
     if (this._proc) return;
 
-    const scriptPath = path.join(__dirname, 'checkFullscreen.ps1');
+    let scriptPath = path.join(__dirname, 'checkFullscreen.ps1');
+    if (scriptPath.includes('app.asar')) {
+      const unpacked = scriptPath.replace('app.asar', 'app.asar.unpacked');
+      const inResources = process.resourcesPath ? path.join(process.resourcesPath, 'checkFullscreen.ps1') : null;
+      if (fs.existsSync(unpacked)) {
+        scriptPath = unpacked;
+      } else if (inResources && fs.existsSync(inResources)) {
+        scriptPath = inResources;
+      }
+    }
 
     try {
       this._proc = spawn('powershell', [
@@ -38,11 +48,15 @@ class FullscreenWatcher extends EventEmitter {
         '-NoProfile',
         '-ExecutionPolicy', 'Bypass',
         '-File', scriptPath,
-      ], { stdio: ['ignore', 'pipe', 'ignore'] });
+      ], { stdio: ['ignore', 'pipe', 'ignore'], windowsHide: true });
     } catch (err) {
       console.error('[FullscreenWatcher] Spawn error:', err);
       return;
     }
+
+    this._proc.on('error', err => {
+      console.warn('[FullscreenWatcher] PowerShell process error:', err.message);
+    });
 
     this._proc.stdout.on('data', chunk => {
       this._buf += chunk.toString();

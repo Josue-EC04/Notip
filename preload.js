@@ -2,6 +2,8 @@
 
 const { contextBridge, ipcRenderer } = require('electron');
 
+const listenerMap = new Map();
+
 contextBridge.exposeInMainWorld('electronAPI', {
   // Pet
   petClicked:         ()       => ipcRenderer.send('pet-clicked'),
@@ -89,11 +91,30 @@ contextBridge.exposeInMainWorld('electronAPI', {
       'auth-error',
       'credits-updated',
     ];
-    if (allowed.includes(channel)) {
-      ipcRenderer.on(channel, (_e, ...args) => callback(...args));
+    if (allowed.includes(channel) && typeof callback === 'function') {
+      const subscription = (_e, ...args) => callback(...args);
+      if (!listenerMap.has(channel)) {
+        listenerMap.set(channel, new Map());
+      }
+      listenerMap.get(channel).set(callback, subscription);
+      ipcRenderer.on(channel, subscription);
     }
   },
   off: (channel, callback) => {
-    ipcRenderer.removeListener(channel, callback);
+    const channelMap = listenerMap.get(channel);
+    if (channelMap && callback && channelMap.has(callback)) {
+      const subscription = channelMap.get(callback);
+      ipcRenderer.removeListener(channel, subscription);
+      channelMap.delete(callback);
+    } else if (!callback) {
+      if (channelMap) {
+        for (const subscription of channelMap.values()) {
+          ipcRenderer.removeListener(channel, subscription);
+        }
+        listenerMap.delete(channel);
+      } else {
+        ipcRenderer.removeAllListeners(channel);
+      }
+    }
   },
 });

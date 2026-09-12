@@ -61,6 +61,9 @@ async function initDatabase(dataPath) {
   try {
     db.run(`ALTER TABLE tareas ADD COLUMN hora_entrega TEXT DEFAULT NULL`);
   } catch (_) {}
+  try {
+    db.run(`ALTER TABLE tareas ADD COLUMN supabase_id TEXT DEFAULT NULL`);
+  } catch (_) {}
 
   persist();
   return db;
@@ -87,27 +90,39 @@ function addTask(tarea) {
   const now         = new Date().toISOString();
   const estado      = tarea.estado || 'pendiente';
   const prioridad   = tarea.prioridad || 'normal';
-  const descripcion = tarea.descripcion || null;
-  const hora        = tarea.hora_entrega || null;
+  const descripcion = tarea.descripcion ? String(tarea.descripcion).trim() : null;
+  const hora        = tarea.hora_entrega ? String(tarea.hora_entrega).trim() : null;
+  const titulo      = tarea.titulo ? String(tarea.titulo).trim() : 'Sin título';
+  const fechaC      = tarea.fecha_creacion || now;
+
   db.run(
-    `INSERT INTO tareas (titulo, descripcion, curso, fecha_entrega, hora_entrega, estado, fecha_creacion, nota_origen, prioridad)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO tareas (titulo, descripcion, curso, fecha_entrega, hora_entrega, estado, fecha_creacion, nota_origen, prioridad, supabase_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
-      tarea.titulo?.trim() || 'Sin título',
-      descripcion?.trim()  || null,
-      tarea.curso?.trim()  || null,
-      tarea.fecha_entrega  || null,
-      hora?.trim()         || null,
+      titulo,
+      descripcion,
+      tarea.curso?.trim() || null,
+      tarea.fecha_entrega || null,
+      hora,
       estado,
-      tarea.fecha_creacion || now,
-      tarea.nota_origen    || null,
+      fechaC,
+      tarea.nota_origen   || null,
       prioridad,
+      tarea.supabase_id   || null,
     ]
   );
   persist();
   const rows = db.exec('SELECT max(id) FROM tareas');
   const id = rows[0]?.values[0][0];
-  return { id, ...tarea, descripcion, hora_entrega: hora, estado, prioridad, fecha_creacion: now };
+  if (!id) return null;
+
+  const taskRow = db.exec('SELECT * FROM tareas WHERE id = ' + Number(id));
+  if (taskRow.length && taskRow[0].values.length) {
+    const cols = taskRow[0].columns;
+    return Object.fromEntries(cols.map((col, i) => [col, taskRow[0].values[0][i]]));
+  }
+
+  return { id, titulo, descripcion, curso: tarea.curso || null, fecha_entrega: tarea.fecha_entrega || null, hora_entrega: hora, estado, prioridad, fecha_creacion: fechaC, nota_origen: tarea.nota_origen || null, supabase_id: tarea.supabase_id || null };
 }
 
 function getTasks(filtro = 'todas') {
@@ -154,6 +169,9 @@ function toggleTaskStatus(id) {
 function deleteTask(id) {
   if (!db) return false;
   const numId = Number(id);
+  const check = db.exec('SELECT id FROM tareas WHERE id = ' + numId);
+  if (!check.length || !check[0].values.length) return false;
+
   db.run('DELETE FROM tareas WHERE id = ?', [numId]);
   persist();
   return true;
@@ -161,28 +179,32 @@ function deleteTask(id) {
 
 function updateTask(id, campos) {
   if (!db) return null;
+  const numId = Number(id);
+  const check = db.exec('SELECT id FROM tareas WHERE id = ' + numId);
+  if (!check.length || !check[0].values.length) return null;
+
   const updates = [];
   const values = [];
 
   if (campos.titulo !== undefined) {
     updates.push('titulo = ?');
-    values.push(campos.titulo);
+    values.push(campos.titulo ? String(campos.titulo).trim() : 'Sin título');
   }
   if (campos.descripcion !== undefined) {
     updates.push('descripcion = ?');
-    values.push(campos.descripcion);
+    values.push(campos.descripcion ? String(campos.descripcion).trim() : null);
   }
   if (campos.curso !== undefined) {
     updates.push('curso = ?');
-    values.push(campos.curso);
+    values.push(campos.curso ? String(campos.curso).trim() : null);
   }
   if (campos.fecha_entrega !== undefined) {
     updates.push('fecha_entrega = ?');
-    values.push(campos.fecha_entrega);
+    values.push(campos.fecha_entrega || null);
   }
   if (campos.hora_entrega !== undefined) {
     updates.push('hora_entrega = ?');
-    values.push(campos.hora_entrega);
+    values.push(campos.hora_entrega ? String(campos.hora_entrega).trim() : null);
   }
   if (campos.estado !== undefined) {
     updates.push('estado = ?');
@@ -190,14 +212,24 @@ function updateTask(id, campos) {
   }
   if (campos.prioridad !== undefined) {
     updates.push('prioridad = ?');
-    values.push(campos.prioridad);
+    values.push(campos.prioridad || 'normal');
+  }
+  if (campos.supabase_id !== undefined) {
+    updates.push('supabase_id = ?');
+    values.push(campos.supabase_id || null);
   }
 
-  if (!updates.length) return null;
-  values.push(id);
+  if (!updates.length) return true;
+  values.push(numId);
 
   db.run(`UPDATE tareas SET ${updates.join(', ')} WHERE id = ?`, values);
   persist();
+
+  const updatedRow = db.exec('SELECT * FROM tareas WHERE id = ' + numId);
+  if (updatedRow.length && updatedRow[0].values.length) {
+    const cols = updatedRow[0].columns;
+    return Object.fromEntries(cols.map((col, i) => [col, updatedRow[0].values[0][i]]));
+  }
   return true;
 }
 
@@ -205,6 +237,9 @@ function updateTask(id, campos) {
 function updateTaskState(id, estado) {
   if (!db) return null;
   const numId = Number(id);
+  const check = db.exec('SELECT id FROM tareas WHERE id = ' + numId);
+  if (!check.length || !check[0].values.length) return null;
+
   db.run('UPDATE tareas SET estado = ? WHERE id = ?', [estado, numId]);
   persist();
   return { id: numId, estado };

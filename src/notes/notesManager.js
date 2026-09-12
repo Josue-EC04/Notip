@@ -106,6 +106,7 @@ function saveClassifiedNote(texto, clasificacion, vaultPath, rawFilePath) {
     fecha:                dateStr,
     tipo,
     titulo:               titulo_corto,
+    prioridad:            clasificacion.prioridad || 'normal',
     tags:                 Array.isArray(clasificacion.tags) ? clasificacion.tags : [],
     estado:               'clasificado',
     clasificado_con_ia:   !error_clasificacion,

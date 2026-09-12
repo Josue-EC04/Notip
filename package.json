@@ -22,12 +22,13 @@
       "!dist",
       "!scratch",
       "!vault/*",
-      "!.git"
+      "!.git",
+      "!.env"
     ],
     "extraResources": [
       {
-        "from": ".env",
-        "to": ".env"
+        "from": "src/utils/checkFullscreen.ps1",
+        "to": "checkFullscreen.ps1"
       }
     ],
     "win": {

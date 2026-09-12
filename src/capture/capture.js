@@ -824,6 +824,13 @@ function appendNotipResponse(result, save = true) {
     if (btnCal) {
       btnCal.addEventListener('click', async (e) => {
         e.stopPropagation();
+        if (btnCal.dataset.added === 'true') {
+          if (btnCal.dataset.link) {
+            window.electronAPI.openExternal(btnCal.dataset.link);
+          }
+          return;
+        }
+
         btnCal.disabled = true;
         btnCal.textContent = 'Agregando a Google...';
         try {
@@ -835,16 +842,13 @@ function appendNotipResponse(result, save = true) {
           });
 
           if (calRes?.success) {
-            btnCal.innerHTML = '✓ En tu Google Calendar';
+            btnCal.dataset.added = 'true';
+            btnCal.dataset.link = calRes.htmlLink || '';
+            btnCal.disabled = false;
+            btnCal.innerHTML = '🔗 Abrir en Google Calendar';
             btnCal.classList.add('calendar-success');
+            btnCal.title = 'Abrir en Google Calendar web';
             showToast('✓ Evento sincronizado en Google Calendar');
-            if (calRes.htmlLink) {
-              btnCal.onclick = (ev) => {
-                ev.stopPropagation();
-                window.electronAPI.openExternal(calRes.htmlLink);
-              };
-              btnCal.title = 'Abrir en Google Calendar web';
-            }
           } else {
             btnCal.disabled = false;
             btnCal.textContent = 'Reintentar Calendar';

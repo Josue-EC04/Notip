@@ -207,7 +207,20 @@ async function handleOAuthCallback(rawUrl) {
     // ── Caso B: Flujo PKCE (código en query ?code=...) ────────────────────────
     if (url.includes('code=')) {
       console.log('[auth] Código OAuth detectado en URL query');
-      const { data, error } = await sb.auth.exchangeCodeForSession(url);
+      let code = null;
+      try {
+        const parsedUrl = new URL(url.replace('notip://', 'http://localhost/'));
+        code = parsedUrl.searchParams.get('code');
+      } catch (_) {
+        const match = url.match(/[?&]code=([^&#]+)/);
+        if (match) code = decodeURIComponent(match[1]);
+      }
+
+      if (!code) {
+        throw new Error('No se encontró el código de autorización en la URL');
+      }
+
+      const { data, error } = await sb.auth.exchangeCodeForSession(code);
       if (error) {
         console.error('[auth] exchangeCodeForSession error:', error.message);
         authWindow?.webContents.send('auth-error', error.message);
@@ -1150,12 +1163,18 @@ ipcMain.handle('add-calendar-event', async (_e, params) => {
       eventBody.start = { dateTime: startDateTimeStr, timeZone };
       eventBody.end   = { dateTime: endDateTimeStr,   timeZone };
     } else if (fecha_entrega) {
+      const dNext = new Date(fecha_entrega + 'T12:00:00');
+      dNext.setDate(dNext.getDate() + 1);
+      const nextDayStr = dNext.toISOString().split('T')[0];
       eventBody.start = { date: fecha_entrega };
-      eventBody.end   = { date: fecha_entrega };
+      eventBody.end   = { date: nextDayStr };
     } else {
       const today = new Date().toISOString().split('T')[0];
+      const dNext = new Date();
+      dNext.setDate(dNext.getDate() + 1);
+      const tomorrowStr = dNext.toISOString().split('T')[0];
       eventBody.start = { date: today };
-      eventBody.end   = { date: today };
+      eventBody.end   = { date: tomorrowStr };
     }
 
     const res = await calendar.events.insert({
@@ -1303,13 +1322,19 @@ ipcMain.handle('save-note', async (_e, texto, forcedType = null, contextoPrevio 
         });
         captureWindow?.webContents.send('tasks-updated');
         notifyBoardTasksUpdated();
+        if (taskObj) {
+          try {
+            const { uploadTask } = require('./src/sync/syncManager');
+            uploadTask(taskObj).catch(() => {});
+          } catch (_) {}
+        }
       }
       fileInfo = saveClassifiedNote(texto, clasificacion, vaultPath, rawResult?.filePath);
     } else {
       // Es una modificación o continuación confirmada de la misma nota
       // 1. Actualizar en SQLite si es tarea
       if (contextoPrevio.taskId) {
-        updateTask(contextoPrevio.taskId, {
+        const updated = updateTask(contextoPrevio.taskId, {
           titulo:        clasificacion.titulo_corto || clasificacion.texto_reescrito,
           descripcion:   clasificacion.descripcion || clasificacion.texto_reescrito,
           curso:         clasificacion.curso,
@@ -1317,9 +1342,13 @@ ipcMain.handle('save-note', async (_e, texto, forcedType = null, contextoPrevio 
           hora_entrega:  clasificacion.hora_entrega || undefined,
           prioridad:     clasificacion.prioridad || 'normal',
         });
-        taskObj = { id: contextoPrevio.taskId };
+        taskObj = (typeof updated === 'object' && updated?.id) ? updated : { id: contextoPrevio.taskId };
         captureWindow?.webContents.send('tasks-updated');
         notifyBoardTasksUpdated();
+        try {
+          const { uploadTask } = require('./src/sync/syncManager');
+          uploadTask(taskObj).catch(() => {});
+        } catch (_) {}
       } else if (clasificacion.tipo === 'tarea') {
         // Si antes no era tarea y ahora se convirtió en una:
         taskObj = addTask({
@@ -1333,6 +1362,12 @@ ipcMain.handle('save-note', async (_e, texto, forcedType = null, contextoPrevio 
         });
         captureWindow?.webContents.send('tasks-updated');
         notifyBoardTasksUpdated();
+        if (taskObj) {
+          try {
+            const { uploadTask } = require('./src/sync/syncManager');
+            uploadTask(taskObj).catch(() => {});
+          } catch (_) {}
+        }
       }
 
       // 2. Actualizar archivo Markdown en el vault
@@ -1361,6 +1396,8 @@ ipcMain.handle('save-note', async (_e, texto, forcedType = null, contextoPrevio 
   notifyBrainNotesUpdated();
   notifyCanvasNotesUpdated();
 
+  const realFilename = fileInfo?.filename || (fileInfo?.filePath ? path.basename(fileInfo.filePath) : null);
+
   return {
     success:          true,
     classified:       true,
@@ -1373,8 +1410,10 @@ ipcMain.handle('save-note', async (_e, texto, forcedType = null, contextoPrevio 
     hora_entrega:     clasificacion.hora_entrega,
     prioridad:        clasificacion.prioridad || 'normal',
     mensaje_feedback: clasificacion.mensaje_feedback,
-    taskId:           taskObj?.id ?? contextoPrevio?.taskId ?? null,
-    filePath:         fileInfo?.filePath ?? contextoPrevio?.filePath ?? null,
+    es_modificacion_de_anterior: Boolean(contextoPrevio && clasificacion.es_modificacion_de_anterior),
+    taskId:           taskObj?.id ?? (Boolean(contextoPrevio && clasificacion.es_modificacion_de_anterior) ? (contextoPrevio?.taskId ?? null) : null),
+    filePath:         fileInfo?.filePath ?? (Boolean(contextoPrevio && clasificacion.es_modificacion_de_anterior) ? (contextoPrevio?.filePath ?? null) : null),
+    filename:         realFilename,
     error_ia:         clasificacion.error_clasificacion ?? false,
   };
 });
@@ -1398,7 +1437,7 @@ ipcMain.handle('toggle-task', async (_e, id) => {
   captureWindow?.webContents.send('tasks-updated');
   notifyBoardTasksUpdated();
   try {
-    const tasks = getTasks('todos');
+    const tasks = getTasks('todas');
     const t = tasks.find(x => x.id === id);
     if (t) {
       const { uploadTask } = require('./src/sync/syncManager');
@@ -1421,10 +1460,24 @@ ipcMain.handle('add-task', async (_e, tarea) => {
 });
 
 ipcMain.handle('delete-task', async (_e, id) => {
-  const { deleteTask } = require('./src/db/database');
+  const { deleteTask, getTasks } = require('./src/db/database');
+  let supabaseId = null;
+  try {
+    const tasks = getTasks('todas');
+    const t = tasks.find(x => x.id === id);
+    if (t?.supabase_id) supabaseId = t.supabase_id;
+  } catch (_) {}
+
   const res = deleteTask(id);
   captureWindow?.webContents.send('tasks-updated');
   notifyBoardTasksUpdated();
+
+  if (supabaseId) {
+    try {
+      const { deleteTaskInCloud } = require('./src/sync/syncManager');
+      deleteTaskInCloud(supabaseId).catch(() => {});
+    } catch (_) {}
+  }
   return res;
 });
 
@@ -1434,7 +1487,7 @@ ipcMain.handle('update-task', async (_e, id, campos) => {
   captureWindow?.webContents.send('tasks-updated');
   notifyBoardTasksUpdated();
   try {
-    const tasks = getTasks('todos');
+    const tasks = getTasks('todas');
     const t = tasks.find(x => x.id === id);
     if (t) {
       const { uploadTask } = require('./src/sync/syncManager');
@@ -1445,10 +1498,18 @@ ipcMain.handle('update-task', async (_e, id, campos) => {
 });
 
 ipcMain.handle('update-task-state', async (_e, id, estado) => {
-  const { updateTaskState } = require('./src/db/database');
+  const { updateTaskState, getTasks } = require('./src/db/database');
   const res = updateTaskState(id, estado);
   captureWindow?.webContents.send('tasks-updated');
   notifyBoardTasksUpdated();
+  try {
+    const tasks = getTasks('todas');
+    const t = tasks.find(x => x.id === id);
+    if (t) {
+      const { uploadTask } = require('./src/sync/syncManager');
+      uploadTask(t).catch(() => {});
+    }
+  } catch (_) {}
   return res;
 });
 
@@ -1467,11 +1528,20 @@ ipcMain.handle('save-note-connections', async (_e, filename, targetTitle) => {
 });
 
 ipcMain.handle('update-note-content', async (_e, filename, campos) => {
-  const { updateNoteFields } = require('./src/notes/notesManager');
+  const { updateNoteFields, getNoteByPath } = require('./src/notes/notesManager');
   const filePath = path.join(vaultPath, filename);
   const res = updateNoteFields(filePath, campos);
   notifyBrainNotesUpdated();
   notifyCanvasNotesUpdated();
+  if (res) {
+    try {
+      const noteData = getNoteByPath(filePath);
+      if (noteData) {
+        const { uploadNote } = require('./src/sync/syncManager');
+        uploadNote(noteData).catch(() => {});
+      }
+    } catch (_) {}
+  }
   return res;
 });
 
@@ -1481,6 +1551,12 @@ ipcMain.handle('delete-note', async (_e, filename) => {
   const res = deleteNote(filePath);
   notifyBrainNotesUpdated();
   notifyCanvasNotesUpdated();
+  if (res) {
+    try {
+      const { deleteNoteInCloud } = require('./src/sync/syncManager');
+      deleteNoteInCloud(filename).catch(() => {});
+    } catch (_) {}
+  }
   return res;
 });
 
