@@ -130,3 +130,8 @@ function showError(msg) {
 function hideError() {
   errorBanner.style.display = 'none';
 }
+
+document.getElementById('btn-local').addEventListener('click', async () => {
+  try { const result = await window.electronAPI.authLocal(); if (!result.success) showError(result.error || 'No se pudo abrir el modo local.'); }
+  catch (err) { showError(err.message); }
+});

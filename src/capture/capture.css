@@ -1508,3 +1508,5 @@ html, body {
   color: #3730A3;
   border: 1px solid #C7D2FE;
 }
+
+.study-strip{display:flex;align-items:center;gap:7px;padding:0 0 10px;flex-wrap:wrap}.study-strip button{background:#eef1e7;color:#42604a;border:1px solid #d8dfd0;border-radius:7px;padding:6px 9px;font:inherit;font-size:11px;cursor:pointer}.study-strip span{font-size:10px;color:#707469}#study-local-status{margin-left:auto}.study-related{margin-top:10px;padding:10px;border:1px solid #d8dfd0;border-radius:8px;background:#f3f5ef}.study-related button{border:0;background:transparent;color:#42604a;text-align:left;cursor:pointer;padding:5px;font:inherit;font-size:11px}.study-related p{font-size:10px;color:#707469;margin:3px 5px}

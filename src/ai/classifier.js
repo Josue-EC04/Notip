@@ -461,4 +461,4 @@ function localFallbackClassifier(texto, forcedType = null, contextoPrevio = null
   };
 }
 
-module.exports = { clasificarConReintentos, descubrirConexionesGlobales, tieneApiKey, localFallbackClassifier };
+module.exports = { SYSTEM_PROMPT, clasificarConReintentos, descubrirConexionesGlobales, tieneApiKey, localFallbackClassifier };

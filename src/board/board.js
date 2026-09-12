@@ -829,3 +829,5 @@ function setupEvents() {
 
 // ─── Start ───────────────────────────────────────────────────────────────────
 init();
+
+document.getElementById('btn-study-focus')?.addEventListener('click', () => window.electronAPI.openStudy('focus'));

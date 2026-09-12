@@ -486,131 +486,29 @@ btnTestKey?.addEventListener('click', async () => {
 });
 
 // ── Save flow (Capture View) ──────────────────────────────────────────────────
+let lastCaptureId = null;
 async function handleSave() {
   const text = input.value.trim();
   if (!text || isSaving) return;
-
-  isSaving = true;
-  hideToast();
-
-  const isContinuation = Boolean(activeNoteContext);
-  setSavingState(true, isContinuation ? 'Respondiendo...' : 'Guardando...');
-
-  // 1. Inmediatamente mostrar el mensaje del usuario en el chat
-  sectionZeroState?.classList.add('hidden');
-  sectionChatStream?.classList.remove('hidden');
-  appendUserMessage(text);
-
-  // Limpiar input y borrador guardado al enviar
-  input.value = '';
-  charCounter.textContent = '0 / 1000';
-  localStorage.removeItem('notip_input_draft');
-
-  // 3. Indicador animado de pensamiento
-  appendThinkingRow();
-  showAiBar();
-
-  let result;
+  isSaving = true; setSavingState(true, 'Guardando en este equipo…');
   try {
-    result = await window.electronAPI.saveNote(text, forcedType, activeNoteContext);
-  } catch (err) {
-    console.error('[capture] saveNote exception:', err);
-    removeThinkingRow();
-    hideAiBar();
-    setSavingState(false);
-    showToast(err?.message ? `Error: ${err.message}` : 'Error inesperado al conectar con el sistema', true);
-    isSaving = false;
-    return;
-  }
-
-  // Quitar el thinking row y ocultar barra de análisis siempre
-  removeThinkingRow();
-  hideAiBar();
-
-  if (!result?.success) {
-    setSavingState(false);
-    showToast(result?.error ?? 'No se pudo procesar la nota', true);
-    isSaving = false;
-    return;
-  }
-
-  const eraModificacion = Boolean(isContinuation && result.es_modificacion_de_anterior);
-
-  // Si era continuación pero la IA detectó un tema diferente e independiente:
-  if (isContinuation && !result.es_modificacion_de_anterior) {
-    showToast('✨ Notip detectó un tema nuevo e independiente');
-    chatHistory = [];
-  }
-
-  // Guardar contexto activo para permitir continuar el chat
-  activeNoteContext = {
-    tipo:          result.tipo,
-    titulo:        result.titulo_corto || result.titulo,
-    texto:         result.texto_reescrito || text,
-    curso:         result.curso,
-    fecha_entrega: result.fecha_entrega,
-    hora_entrega:  result.hora_entrega,
-    prioridad:     result.prioridad,
-    taskId:        result.taskId ?? (eraModificacion ? activeNoteContext?.taskId : null),
-    filePath:      result.filePath ?? (eraModificacion ? activeNoteContext?.filePath : null),
-    timestamp:     Date.now(),
-  };
-
-  setSavingState(false);
-  updateActiveNoteUI(activeNoteContext);
-  saveChatToStorage();
-
-  // 1. Mostrar la respuesta de Notip/Claude INMEDIATAMENTE
-  if (result.classified) {
-    appendNotipResponse(result);
-    showToast(isContinuation ? (eraModificacion ? 'Nota actualizada' : 'Nueva nota creada') : (result.tipo === 'tarea' ? 'Tarea registrada en la lista' : 'Guardado en notas'));
-  } else if (result.sinApiKey) {
-    appendNotipResponse({
-      tipo: 'sin_clasificar',
-      titulo: text.slice(0, 30),
-      mensaje_feedback: 'Nota guardada en tu vault (sin API Key de Claude configurada).',
-    });
-    showToast('Guardada sin clasificar');
-  } else if (result.errorIa) {
-    appendNotipResponse({
-      tipo: 'sin_clasificar',
-      titulo: text.slice(0, 30),
-      mensaje_feedback: `Guardada · ${result.errorMsg ?? 'IA no disponible'}`,
-    });
-    showToast('Guardada en Vault');
-  } else {
-    appendNotipResponse({
-      tipo: 'nota',
-      titulo: text.slice(0, 30),
-      mensaje_feedback: 'Nota guardada en el vault',
-    });
-    showToast('Nota guardada correctamente');
-  }
-
-  // 2. Refrescar contador y actividad en segundo plano de forma segura
-  try {
-    await refreshCounter();
-    await loadRecentActivity();
-  } catch (err) {
-    console.warn('[capture] Error refreshing counters:', err);
-  }
-
-  // Mostrar u ocultar botón de "Ver en Tablero" según el tipo
-  if (btnOpenBoardAction) {
-    if (result.tipo === 'tarea') {
-      btnOpenBoardAction.classList.remove('hidden');
-    } else {
-      btnOpenBoardAction.classList.add('hidden');
-    }
-  }
-
-  // Preparar input para continuar la conversación o escribir más
-  btnSave.disabled = true;
-  isSaving = false;
-  setTimeout(() => input.focus(), 50);
+    const response = await window.electronAPI.studyCapture(text, forcedType, activeNoteContext);
+    if (!response?.success) throw Error(response?.error || 'No se pudo guardar.');
+    const entry = response.data; lastCaptureId = entry.id;
+    sectionZeroState?.classList.add('hidden'); sectionChatStream?.classList.remove('hidden');
+    appendUserMessage(text);
+    appendNotipResponse({tipo:'sin_clasificar',titulo:'Captura guardada',mensaje_feedback:'Ya está en Por organizar. Puedes seguir escribiendo aunque no tengas internet.'});
+    if (input.value.trim() === text) input.value = '';
+    localStorage.removeItem('notip_input_draft');
+    activeNoteContext = null; updateActiveNoteUI(null);
+    charCounter.textContent = input.value.length + ' / 1000';
+    showToast('Guardado en este equipo'); refreshCounter();
+  } catch (err) { showToast(err.message, true); }
+  finally { isSaving = false; setSavingState(false); input.focus(); }
 }
 
 function resetToNewNote() {
+  lastCaptureId = null;
   activeNoteContext = null;
   chatHistory = [];
   try {
@@ -974,3 +872,39 @@ window.electronAPI.on('tasks-updated', () => {
 window.electronAPI.on('switch-tab', () => {
   input?.focus();
 });
+
+document.getElementById('btn-study-inbox').onclick = () => window.electronAPI.openStudy('inbox');
+document.getElementById('btn-study-class').onclick = () => window.electronAPI.openStudy('classes');
+function updateStudyStrip(state) {
+  document.getElementById('study-pending').textContent = state.entries.filter(e => e.status !== 'done').length;
+  const session = state.sessions.find(s => s.id === state.activeSessionId);
+  document.getElementById('btn-study-class').textContent = session ? 'En clase: ' + session.name.slice(0,20) : 'Iniciar clase';
+  document.getElementById('study-local-status').textContent = state.paused ? 'IA pausada' : state.processing ? 'Organizando…' : 'Guardado local';
+  if (session) { activeNoteContext = null; updateActiveNoteUI(null); }
+}
+window.electronAPI.studyState().then(r => { if(r.success) updateStudyStrip(r.data); }).catch(()=>{});
+window.electronAPI.on('study-updated', updateStudyStrip);
+window.electronAPI.on('study-organized', async entry => {
+  if (entry.id !== lastCaptureId) return;
+  const r = entry.result;
+  const result = {...r,titulo:r.titulo_corto,taskId:entry.taskId,filePath:entry.filePath};
+  appendNotipResponse(result);
+  if (!entry.sessionId) {
+    activeNoteContext = {...result,texto:r.texto_reescrito,timestamp:Date.now()};
+    updateActiveNoteUI(activeNoteContext); saveChatToStorage();
+  }
+  showToast(entry.source === 'manual' ? 'Organizada manualmente' : 'Captura organizada con IA');
+  try {
+    const response = await window.electronAPI.studyRelated(r.texto_reescrito,entry.filename);
+    if (!response.success || !response.data.length) return;
+    const panel = document.createElement('div'); panel.className = 'study-related';
+    const title = document.createElement('p');title.textContent = 'Esto conecta con una idea tuya';panel.append(title);
+    response.data.forEach(note => {
+      const b = document.createElement('button');b.textContent = note.titulo + ' · Conectar';
+      const reason=document.createElement('p');reason.textContent=note.reason;
+      b.onclick = async () => {const res=await window.electronAPI.studyConnect(entry.id,note.filename);if(res.success){b.disabled=true;b.textContent='Conectada: '+note.titulo;}else showToast(res.error,true);};
+      panel.append(b,reason);
+    });chatStreamMessages.append(panel);chatStreamMessages.scrollTop=chatStreamMessages.scrollHeight;
+  } catch (_) {}
+});
+window.addEventListener('online', () => window.electronAPI.studyOnline());

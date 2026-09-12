@@ -65,6 +65,9 @@ async function initDatabase(dataPath) {
     db.run(`ALTER TABLE tareas ADD COLUMN supabase_id TEXT DEFAULT NULL`);
   } catch (_) {}
 
+  const columns = db.exec('PRAGMA table_info(tareas)')[0].values.map(r => r[1]);
+  if (!columns.includes('duracion_min')) db.run('ALTER TABLE tareas ADD COLUMN duracion_min INTEGER DEFAULT NULL');
+  if (!columns.includes('primer_paso')) db.run('ALTER TABLE tareas ADD COLUMN primer_paso TEXT DEFAULT NULL');
   persist();
   return db;
 }
@@ -78,9 +81,12 @@ function persist() {
   if (!db || !dbFile) return;
   try {
     const data = db.export();
-    fs.writeFileSync(dbFile, Buffer.from(data));
+    const temporary = dbFile + '.tmp';
+    fs.writeFileSync(temporary, Buffer.from(data));
+    fs.renameSync(temporary, dbFile);
   } catch (err) {
     console.error('[database] Error al persistir DB:', err);
+    throw err;
   }
 }
 
@@ -219,6 +225,11 @@ function updateTask(id, campos) {
     values.push(campos.supabase_id || null);
   }
 
+  if (campos.duracion_min !== undefined) {
+    if (![5, 15, 30, 60].includes(Number(campos.duracion_min))) throw Error('Duración no válida');
+    updates.push('duracion_min = ?'); values.push(Number(campos.duracion_min));
+  }
+  if (campos.primer_paso !== undefined) { updates.push('primer_paso = ?'); values.push(String(campos.primer_paso || '').slice(0,500)); }
   if (!updates.length) return true;
   values.push(numId);
 

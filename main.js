@@ -31,6 +31,7 @@ app.setAppUserModelId('com.notip.app');
 // Registrar app como handler del protocolo notip:// en Windows
 // En desarrollo, Windows necesita process.execPath y la ruta del proyecto para no intentar ejecutar la URL como módulo
 function registerProtocolClient() {
+  if (process.env.NOTIP_DATA_PATH) return;
   try {
     if (process.defaultApp || !app.isPackaged) {
       if (process.argv.length >= 2) {
@@ -50,6 +51,7 @@ registerProtocolClient();
 const appIconPath = path.join(__dirname, 'src', 'assets', 'icon.png');
 const appIconIco  = path.join(__dirname, 'src', 'assets', 'icon.ico');
 
+if (process.env.NOTIP_DATA_PATH) app.setPath('userData', path.resolve(process.env.NOTIP_DATA_PATH));
 const Store = require('electron-store');
 const store = new Store();
 
@@ -106,7 +108,7 @@ const userDataPath = app.getPath('userData');
 
 // Bóveda de notas: en desarrollo usa ./vault, empaquetado usa userDataPath/vault para permisos de escritura
 const defaultVault = app.isPackaged ? path.join(userDataPath, 'vault') : path.join(__dirname, 'vault');
-const vaultPath = store.get('vaultPath', defaultVault);
+const vaultPath = process.env.NOTIP_DATA_PATH ? path.join(userDataPath, 'vault') : store.get('vaultPath', defaultVault);
 const dataPath  = path.join(userDataPath, 'data');
 
 function ensureDirs() {
@@ -250,11 +252,13 @@ async function handleOAuthCallback(rawUrl) {
 
 /** Cierra la ventana de login y abre la app principal */
 function onLoginSuccess() {
+  if (petWindow && !petWindow.isDestroyed()) return;
   if (authWindow && !authWindow.isDestroyed()) {
     authWindow.removeAllListeners('close');
     authWindow.destroy();
     authWindow = null;
   }
+  study.resume();
   // Iniciar la app principal
   createPetWindow();
   createCaptureWindow();
@@ -781,7 +785,10 @@ function createTray() {
 }
 
 // ─── Fullscreen auto-hide & auto-restore ─────────────────────────────────────────
+let fullscreenWatcherReady = false;
 function setupFullscreenWatcher() {
+  if (fullscreenWatcherReady) return;
+  fullscreenWatcherReady = true;
   const watcher = require('./src/utils/fullscreenWatcher');
 
   watcher.on('change', isFullscreen => {
@@ -808,6 +815,8 @@ function setupFullscreenWatcher() {
 
 // ─── Global shortcut ───────────────────────────────────────────────────────────
 function setupGlobalShortcut() {
+  globalShortcut.register('CommandOrControl+Shift+K', () => showBoard());
+  globalShortcut.register('CommandOrControl+Shift+E', () => study.show());
   // Ctrl+Shift+H → toggle pet visibility
   globalShortcut.register('CommandOrControl+Shift+H', () => {
     if (petWindow?.isVisible() && !userHidden) {
@@ -980,6 +989,8 @@ ipcMain.handle('auth-login', async () => {
 /** Cierra la sesión y muestra la pantalla de login */
 async function performLogout() {
   try {
+    store.set('local_mode', false);
+    study.stop();
     const { signOut } = require('./src/supabase/client');
     await signOut();
     store.delete('notip-provider-token');
@@ -1066,6 +1077,7 @@ ipcMain.handle('save-custom-api-key', async (_e, key) => {
       return { success: false, error: 'La API Key de Anthropic debe empezar con "sk-ant-"' };
     }
     store.set('anthropic_custom_key', trimmed);
+    study.wake(true);
     return { success: true, saved: true };
   } catch (err) {
     return { success: false, error: err.message };
@@ -1254,168 +1266,8 @@ ipcMain.on('stop-pet-drag', () => {
 
 // ─── Save note + AI classification ────────────────────────────────────────────
 ipcMain.handle('save-note', async (_e, texto, forcedType = null, contextoPrevio = null) => {
-  if (!texto?.trim()) return { success: false, error: 'Texto vacío' };
-  texto = texto.trim();
-
-  const { saveRawNote, saveClassifiedNote } = require('./src/notes/notesManager');
-  const { clasificarConReintentos, tieneApiKey, localFallbackClassifier } = require('./src/ai/classifier');
-
-  // Si no hay contexto previo, guardamos archivo crudo inmediatamente
-  let rawResult = null;
-  if (!contextoPrevio) {
-    try {
-      rawResult = saveRawNote(texto, vaultPath);
-    } catch (err) {
-      return { success: false, error: `Error al guardar: ${err.message}` };
-    }
-  }
-
-  // Notificar estado "pensando"
-  petWindow?.webContents.send('set-thinking', true);
-  captureWindow?.webContents.send('ai-thinking');
-
-  let clasificacion = null;
-  const customKey = store.get('anthropic_custom_key');
-  const defaultApiKey = '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';
-  const apiKey = (customKey && customKey.trim()) ? customKey.trim() : (process.env.ANTHROPIC_API_KEY || defaultApiKey);
-
-  if (tieneApiKey(apiKey)) {
-    try {
-      const { getAllNotes } = require('./src/notes/notesManager');
-      const existingVaultNotes = getAllNotes(vaultPath).map(n => ({
-        filename: n.filename,
-        titulo: n.titulo || n.filename,
-        tipo: n.tipo,
-        tags: n.tags || [],
-      }));
-      clasificacion = await clasificarConReintentos(texto, apiKey, forcedType, contextoPrevio, existingVaultNotes);
-    } catch (err) {
-      console.warn('[save-note] IA falló (' + err.message + '). Usando analizador inteligente local.');
-      clasificacion = localFallbackClassifier(texto, forcedType, contextoPrevio);
-    }
-  } else {
-    clasificacion = localFallbackClassifier(texto, forcedType, contextoPrevio);
-  }
-
-  petWindow?.webContents.send('set-thinking', false);
-
-  // Guardar clasificado o actualizar la nota existente
-  let taskObj = null;
-  let fileInfo = null;
-  try {
-    const { addTask, updateTask } = require('./src/db/database');
-    const { saveClassifiedNote, updateExistingNote } = require('./src/notes/notesManager');
-
-    const esModificacion = Boolean(contextoPrevio && clasificacion.es_modificacion_de_anterior);
-
-    if (!esModificacion) {
-      if (clasificacion.tipo === 'tarea') {
-        taskObj = addTask({
-          titulo:         clasificacion.titulo_corto || clasificacion.texto_reescrito || texto,
-          descripcion:    clasificacion.descripcion || clasificacion.texto_reescrito || null,
-          curso:          clasificacion.curso,
-          fecha_entrega:  clasificacion.fecha_entrega,
-          hora_entrega:   clasificacion.hora_entrega || null,
-          prioridad:      clasificacion.prioridad || 'normal',
-          fecha_creacion: new Date().toISOString(),
-          nota_origen:    rawResult?.filename,
-        });
-        captureWindow?.webContents.send('tasks-updated');
-        notifyBoardTasksUpdated();
-        if (taskObj) {
-          try {
-            const { uploadTask } = require('./src/sync/syncManager');
-            uploadTask(taskObj).catch(() => {});
-          } catch (_) {}
-        }
-      }
-      fileInfo = saveClassifiedNote(texto, clasificacion, vaultPath, rawResult?.filePath);
-    } else {
-      // Es una modificación o continuación confirmada de la misma nota
-      // 1. Actualizar en SQLite si es tarea
-      if (contextoPrevio.taskId) {
-        const updated = updateTask(contextoPrevio.taskId, {
-          titulo:        clasificacion.titulo_corto || clasificacion.texto_reescrito,
-          descripcion:   clasificacion.descripcion || clasificacion.texto_reescrito,
-          curso:         clasificacion.curso,
-          fecha_entrega: clasificacion.fecha_entrega,
-          hora_entrega:  clasificacion.hora_entrega || undefined,
-          prioridad:     clasificacion.prioridad || 'normal',
-        });
-        taskObj = (typeof updated === 'object' && updated?.id) ? updated : { id: contextoPrevio.taskId };
-        captureWindow?.webContents.send('tasks-updated');
-        notifyBoardTasksUpdated();
-        try {
-          const { uploadTask } = require('./src/sync/syncManager');
-          uploadTask(taskObj).catch(() => {});
-        } catch (_) {}
-      } else if (clasificacion.tipo === 'tarea') {
-        // Si antes no era tarea y ahora se convirtió en una:
-        taskObj = addTask({
-          titulo:         clasificacion.titulo_corto || clasificacion.texto_reescrito || texto,
-          descripcion:    clasificacion.descripcion || clasificacion.texto_reescrito || null,
-          curso:          clasificacion.curso,
-          fecha_entrega:  clasificacion.fecha_entrega,
-          hora_entrega:   clasificacion.hora_entrega || null,
-          prioridad:      clasificacion.prioridad || 'normal',
-          fecha_creacion: new Date().toISOString(),
-        });
-        captureWindow?.webContents.send('tasks-updated');
-        notifyBoardTasksUpdated();
-        if (taskObj) {
-          try {
-            const { uploadTask } = require('./src/sync/syncManager');
-            uploadTask(taskObj).catch(() => {});
-          } catch (_) {}
-        }
-      }
-
-      // 2. Actualizar archivo Markdown en el vault
-      if (contextoPrevio.filePath) {
-        updateExistingNote(contextoPrevio.filePath, clasificacion);
-        fileInfo = { filePath: contextoPrevio.filePath };
-      }
-    }
-  } catch (err) {
-    console.error('[save-note] post-processing error:', err);
-  }
-
-  // Sincronizar nota en segundo plano con Supabase
-  if (fileInfo?.filePath) {
-    try {
-      const { getNoteByPath } = require('./src/notes/notesManager');
-      const noteData = getNoteByPath(fileInfo.filePath);
-      if (noteData) {
-        const { uploadNote } = require('./src/sync/syncManager');
-        uploadNote(noteData).catch(() => {});
-      }
-    } catch (_) {}
-  }
-
-  // Notificar al cerebro, al kanban y a la pizarra
-  notifyBrainNotesUpdated();
-  notifyCanvasNotesUpdated();
-
-  const realFilename = fileInfo?.filename || (fileInfo?.filePath ? path.basename(fileInfo.filePath) : null);
-
-  return {
-    success:          true,
-    classified:       true,
-    tipo:             clasificacion.tipo,
-    titulo:           clasificacion.titulo_corto,
-    texto_reescrito:  clasificacion.texto_reescrito,
-    descripcion:      clasificacion.descripcion,
-    curso:            clasificacion.curso,
-    fecha_entrega:    clasificacion.fecha_entrega,
-    hora_entrega:     clasificacion.hora_entrega,
-    prioridad:        clasificacion.prioridad || 'normal',
-    mensaje_feedback: clasificacion.mensaje_feedback,
-    es_modificacion_de_anterior: Boolean(contextoPrevio && clasificacion.es_modificacion_de_anterior),
-    taskId:           taskObj?.id ?? (Boolean(contextoPrevio && clasificacion.es_modificacion_de_anterior) ? (contextoPrevio?.taskId ?? null) : null),
-    filePath:         fileInfo?.filePath ?? (Boolean(contextoPrevio && clasificacion.es_modificacion_de_anterior) ? (contextoPrevio?.filePath ?? null) : null),
-    filename:         realFilename,
-    error_ia:         clasificacion.error_clasificacion ?? false,
-  };
+  try { return study.capture(texto, forcedType, contextoPrevio); }
+  catch (err) { return { success: false, error: err.message }; }
 });
 
 ipcMain.handle('get-notes-count', async () => {
@@ -1530,7 +1382,7 @@ ipcMain.handle('save-note-connections', async (_e, filename, targetTitle) => {
 ipcMain.handle('update-note-content', async (_e, filename, campos) => {
   const { updateNoteFields, getNoteByPath } = require('./src/notes/notesManager');
   const filePath = path.join(vaultPath, filename);
-  const res = updateNoteFields(filePath, campos);
+  const res = study.editPendingNote(filename, campos) || updateNoteFields(filePath, campos);
   notifyBrainNotesUpdated();
   notifyCanvasNotesUpdated();
   if (res) {
@@ -1548,7 +1400,7 @@ ipcMain.handle('update-note-content', async (_e, filename, campos) => {
 ipcMain.handle('delete-note', async (_e, filename) => {
   const { deleteNote } = require('./src/notes/notesManager');
   const filePath = path.join(vaultPath, filename);
-  const res = deleteNote(filePath);
+  const res = study.deletePendingNote(filename) || deleteNote(filePath);
   notifyBrainNotesUpdated();
   notifyCanvasNotesUpdated();
   if (res) {
@@ -1628,6 +1480,14 @@ function getErrorMsg(err) {
   return err?.message ?? 'Error desconocido';
 }
 
+const study = require('./src/study/registerStudy')({
+  app, ipcMain, BrowserWindow, store, vaultPath, dataPath,
+  preload: path.join(__dirname, 'preload.js'), icon: appIconPath,
+  onLocalLogin: onLoginSuccess,
+  onTasksChanged: () => { captureWindow?.webContents.send('tasks-updated'); notifyBoardTasksUpdated(); },
+  onNotesChanged: () => { notifyBrainNotesUpdated(); notifyCanvasNotesUpdated(); },
+});
+
 // ─── App lifecycle ─────────────────────────────────────────────────────────────
 app.whenReady().then(async () => {
   ensureDirs();
@@ -1636,6 +1496,7 @@ app.whenReady().then(async () => {
   try {
     const { initDatabase } = require('./src/db/database');
     await initDatabase(dataPath);
+    study.init();
   } catch (err) {
     console.error('[main] Error al iniciar SQLite:', err);
   }
@@ -1658,12 +1519,17 @@ app.whenReady().then(async () => {
     return;
   }
 
+  if (store.get('local_mode', false)) { onLoginSuccess(); return; }
+  // Show a usable local entrance immediately; a slow network must not block capture.
+  createAuthWindow();
   // Verificar si hay una sesión activa de Supabase (renovándola con refresh_token si expiró)
   const { restoreOrRefreshSession, getStoredUser } = require('./src/supabase/client');
   const session = await restoreOrRefreshSession();
   const user = session?.user || getStoredUser();
 
-  if (user) {
+  if (user && !petWindow) {
+    study.resume();
+    if (authWindow && !authWindow.isDestroyed()) { authWindow.removeAllListeners('close'); authWindow.destroy(); authWindow = null; }
     // ✅ Sesión válida → abrir app directamente
     console.log('[main] Sesión activa para:', user.email);
     // Restaurar provider token de Calendar si existe
@@ -1684,7 +1550,7 @@ app.whenReady().then(async () => {
   } else {
     // 🔐 Sin sesión → mostrar pantalla de login
     console.log('[main] Sin sesión — mostrando login');
-    createAuthWindow();
+    if (!petWindow) createAuthWindow();
   }
 });
 
@@ -1702,6 +1568,8 @@ app.on('will-quit', () => {
 });
 
 app.on('before-quit', () => {
+  study.stop();
+  canvasWindow?.destroy();
   petWindow?.destroy();
   captureWindow?.destroy();
   boardWindow?.destroy();
@@ -1709,4 +1577,3 @@ app.on('before-quit', () => {
   authWindow?.destroy();
   try { require('./src/db/database').closeDatabase(); } catch { /* ignore */ }
 });
-

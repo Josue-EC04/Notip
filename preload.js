@@ -5,6 +5,23 @@ const { contextBridge, ipcRenderer } = require('electron');
 const listenerMap = new Map();
 
 contextBridge.exposeInMainWorld('electronAPI', {
+  // Estudio: todas las capturas se guardan antes de llamar a IA.
+  openStudy: (tab) => ipcRenderer.send('open-study', tab),
+  authLocal: () => ipcRenderer.invoke('auth-local'),
+  studyOnline: () => ipcRenderer.send('study-online'),
+  studyState: () => ipcRenderer.invoke('study-state'),
+  studyCapture: (text, type, context) => ipcRenderer.invoke('study-capture', text, type, context),
+  studyEdit: (id, text) => ipcRenderer.invoke('study-edit', id, text),
+  studyDelete: (id) => ipcRenderer.invoke('study-delete', id),
+  studyManual: (id, type) => ipcRenderer.invoke('study-manual', id, type),
+  studyRetry: () => ipcRenderer.invoke('study-retry'),
+  studyPause: (paused) => ipcRenderer.invoke('study-pause', paused),
+  studyStartClass: (name) => ipcRenderer.invoke('study-start-class', name),
+  studyEndClass: () => ipcRenderer.invoke('study-end-class'),
+  studyRecommend: (minutes) => ipcRenderer.invoke('study-recommend', minutes),
+  studyRelated: (text, filename) => ipcRenderer.invoke('study-related', text, filename),
+  studyConnect: (id, filename) => ipcRenderer.invoke('study-connect', id, filename),
+  studyTaskEffort: (id, minutes, step) => ipcRenderer.invoke('study-task-effort', id, minutes, step),
   // Pet
   petClicked:         ()       => ipcRenderer.send('pet-clicked'),
   showPetContextMenu: (coords) => ipcRenderer.send('show-pet-menu', coords),
@@ -75,6 +92,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Events from main → renderer
   on: (channel, callback) => {
     const allowed = [
+      'study-updated', 'study-organized', 'study-tab',
       'capture-opened', 'capture-closed',
       'focus-input', 'ai-thinking',
       'set-thinking', 'tasks-updated',
