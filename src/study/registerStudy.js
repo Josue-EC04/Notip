@@ -3,21 +3,13 @@ const path = require('path');
 const {StudyService,relatedNotes,recommendTask}=require('./studyService');
 const {createStudyAI}=require('./studyAI');
 
-module.exports=function registerStudy({app,ipcMain,BrowserWindow,store,vaultPath,dataPath,preload,icon,onLocalLogin,onTasksChanged,onNotesChanged,aiAdapter=null}) {
+module.exports=function registerStudy({app,ipcMain,BrowserWindow,store,vaultPath,dataPath,preload,icon,onLocalLogin,onTasksChanged,onNotesChanged,aiAdapter=null,onOpen=()=>{}}) {
   const db=require('../db/database');
   const notes=require('../notes/notesManager');
-  let win=null, service=null, timer=null, suspended=true;
+  let service=null, timer=null, suspended=true;
   const getKey=()=>store.get('anthropic_custom_key')||process.env.ANTHROPIC_API_KEY||'';
   const broadcast=(channel,data)=>BrowserWindow.getAllWindows().forEach(w=>{if(!w.isDestroyed()) w.webContents.send(channel,data);});
-  function show(tab='inbox') {
-    if(!win||win.isDestroyed()) {
-      win=new BrowserWindow({width:1050,height:760,minWidth:720,minHeight:550,title:'Notip — Estudio',icon,backgroundColor:'#F7F5EF',show:false,webPreferences:{preload,contextIsolation:true,nodeIntegration:false}});
-      win.setMenuBarVisibility(false);
-      win.loadFile(path.join(__dirname,'study.html'));
-      win.once('ready-to-show',()=>{win.show();win.webContents.send('study-tab',tab);});
-      win.on('closed',()=>{win=null;});
-    } else {win.show();win.focus();win.webContents.send('study-tab',tab);}
-  }
+  function show(tab='inbox') { onOpen(tab); }
   function wake(force=false) {if(service&&!suspended) service.process(force).catch(err=>console.error('[study]',err.message));}
   const safe=fn=>async(_e,...args)=>{try {if(!service) throw Error('El almacenamiento local todavía no está listo.');return {success:true,data:await fn(...args)};}catch(err){return {success:false,error:err.message};}};
   ipcMain.on('open-study',(_e,tab)=>show(['inbox','classes','focus'].includes(tab)?tab:'inbox'));
@@ -74,6 +66,6 @@ module.exports=function registerStudy({app,ipcMain,BrowserWindow,store,vaultPath
     },
     deletePendingNote(filename){const e=service?.state.entries.find(e=>e.filename===filename&&e.status!=='done');if(!e)return false;service.remove(e.id);return true;},
     resume(){suspended=false;setTimeout(()=>wake(),500).unref();},
-    stop(){suspended=true;if(service){service.generation++;}if(win&&!win.isDestroyed())win.destroy();},
+    stop(){suspended=true;if(service){service.generation++;}},
   };
 };

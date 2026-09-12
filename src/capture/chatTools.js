@@ -1,6 +1,10 @@
+(() => {
 'use strict';
 const api=window.electronAPI;
-const $=id=>document.getElementById(id);
+const root=document.getElementById('chat-tools');
+const $=id=>root.querySelector('#'+id);
+function returnToChat(){root.hidden=true;document.getElementById('view-capture').classList.remove('tools-open');document.getElementById('capture-dynamic-area').classList.remove('hidden');document.getElementById('note-input').focus();}
+$('close-chat-tools').onclick=returnToChat;
 let state={entries:[],sessions:[]},editing=null,minutes=15,selectedTask=null,focusSession=null,noticeTimer;
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const date=s=>new Date(s).toLocaleString('es-PE',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
@@ -8,14 +12,11 @@ const labels={pending:'Por organizar',processing:'Organizando…',error:'Pendien
 function notify(text){$('message').textContent=text;$('message').hidden=false;clearTimeout(noticeTimer);noticeTimer=setTimeout(()=>$('message').hidden=true,7000);}
 async function call(name,...args){const r=await api[name](...args);if(!r?.success)throw Error(r?.error||'No se pudo completar.');return r.data;}
 async function action(fn){try{await fn();}catch(e){notify(e.message);}}
-function tab(name){document.querySelectorAll('[data-tab]').forEach(b=>b.classList.toggle('active',b.dataset.tab===name));for(const t of ['inbox','classes','focus'])$(t+'-view').hidden=t!==name;if(name==='focus')action(loadRecommendation);}
-document.querySelectorAll('[data-tab]').forEach(b=>b.addEventListener('click',()=>tab(b.dataset.tab)));
-$('open-board').onclick=()=>api.openBoard();$('open-brain').onclick=()=>api.openBrain();
+function tab(name){if(!['inbox','classes','focus'].includes(name))return;root.hidden=false;root.dataset.tool=name;document.getElementById('view-capture').classList.add('tools-open');document.getElementById('capture-dynamic-area').classList.add('hidden');$('tool-title').textContent={inbox:'Pendientes',classes:'Mis clases',focus:'Tengo 15 minutos'}[name];for(const t of ['inbox','classes','focus'])$(t+'-view').hidden=t!==name;root.scrollTop=0;if(name==='focus')action(loadRecommendation);}
 function render(){
-  const pending=state.entries.filter(e=>e.status!=='done').length;$('pending-count').textContent=pending;
+  const pending=state.entries.filter(e=>e.status!=='done').length;
   $('connection').textContent=state.paused?'IA en pausa · guardado local activo':!state.configured?'Guardado local · configura IA en Ajustes':state.processing?'Organizando tus capturas…':state.connection==='unavailable'?'Sin acceso a IA · tus capturas están guardadas':`${pending} por organizar · guardado local activo`;
   $('pause-ai').textContent=state.paused?'Reanudar IA':'Pausar IA';$('retry').disabled=state.processing||state.paused||!state.configured;
-  const active=state.sessions.find(s=>s.id===state.activeSessionId);$('class-context').textContent=active?`En clase: ${active.name}`:'Captura libre';
   renderInbox();renderClasses();
 }
 function renderInbox(){
@@ -41,18 +42,14 @@ function renderInbox(){
 }
 function button(text,handler,cls=''){const b=document.createElement('button');b.type='button';b.textContent=text;b.className=cls;b.addEventListener('click',handler);return b;}
 $('inbox-search').oninput=renderInbox;$('show-done').onchange=renderInbox;
-let savingCapture=false;
-$('capture-form').onsubmit=e=>{e.preventDefault();if(savingCapture)return;savingCapture=true;action(async()=>{try{const field=$('capture-text');const text=field.value;await call('studyCapture',text,$('capture-type').value||null,null);if(field.value===text){field.value='';localStorage.removeItem('notip_study_draft');}notify('Guardado en este equipo. Puedes seguir escribiendo.');field.focus();}finally{savingCapture=false;}});};
-$('capture-text').value=localStorage.getItem('notip_study_draft')||'';
-$('capture-text').oninput=()=>localStorage.setItem('notip_study_draft',$('capture-text').value);
 $('edit-cancel').onclick=()=>$('edit-dialog').close();$('related-close').onclick=()=>$('related-dialog').close();
 $('edit-form').onsubmit=e=>{e.preventDefault();action(async()=>{await call('studyEdit',editing,$('edit-text').value);$('edit-dialog').close();notify('Cambios guardados; se organizará la última versión.');});};
 $('retry').onclick=()=>action(async()=>{await call('studyRetry');notify('Revisando capturas y resúmenes pendientes…');});
 $('pause-ai').onclick=()=>action(async()=>{await call('studyPause',!state.paused);});
-$('class-form').onsubmit=e=>{e.preventDefault();action(async()=>{await call('studyStartClass',$('class-name').value);$('class-name').value='';notify('Clase iniciada. Las nuevas capturas se agruparán aquí.');tab('inbox');$('capture-text').focus();});};
+$('class-form').onsubmit=e=>{e.preventDefault();action(async()=>{await call('studyStartClass',$('class-name').value);$('class-name').value='';notify('Clase iniciada. Las nuevas capturas se agruparán aquí.');returnToChat();});};
 function renderClasses(){
   const active=state.sessions.find(s=>s.id===state.activeSessionId);$('class-form').hidden=!!active;$('active-class').hidden=!active;
-  if(active){const el=$('active-class');el.innerHTML=`<span class="eyebrow">CLASE EN CURSO</span><h2>${esc(active.name)}</h2><p>${state.entries.filter(e=>e.sessionId===active.id).length} capturas · iniciada ${esc(date(active.created))}</p><div class="actions"></div>`;el.querySelector('.actions').append(button('Añadir apunte',()=>{tab('inbox');$('capture-text').focus();}),button('Terminar y resumir',()=>action(async()=>{await call('studyEndClass');notify('Clase terminada. El resumen llegará al organizar sus capturas con IA.');}),'primary'));}
+  if(active){const el=$('active-class');el.innerHTML=`<span class="eyebrow">CLASE EN CURSO</span><h2>${esc(active.name)}</h2><p>${state.entries.filter(e=>e.sessionId===active.id).length} capturas · iniciada ${esc(date(active.created))}</p><div class="actions"></div>`;el.querySelector('.actions').append(button('Añadir apunte',()=>{returnToChat();}),button('Terminar y resumir',()=>action(async()=>{await call('studyEndClass');notify('Clase terminada. El resumen llegará al organizar sus capturas con IA.');}),'primary'));}
   const list=$('class-list');list.innerHTML='';const sessions=state.sessions.filter(s=>s.id!==state.activeSessionId);
   if(!sessions.length){list.innerHTML='<div class="empty"><h3>Tu próxima clase empieza aquí.</h3><p>Al terminar tendrás tus apuntes, dudas y entregas reunidos.</p></div>';return;}
   for(const s of sessions){const entries=state.entries.filter(e=>e.sessionId===s.id);const card=document.createElement('article');card.className='card';card.innerHTML=`<div class="card-top"><h2>${esc(s.name)}</h2><span class="badge ${esc(s.status)}">${s.status==='done'?'Resumen listo':esc(labels[s.status])}</span></div><p class="date">${esc(date(s.created))} · ${entries.length} capturas</p>${s.error?`<p class="error-text">${esc(s.error)}</p>`:''}`;
@@ -60,7 +57,7 @@ function renderClasses(){
     const tasks=entries.filter(e=>e.result?.tipo==='tarea');const details=document.createElement('details');details.innerHTML=`<summary>Ver ${entries.length} apuntes y ${tasks.length} tareas</summary>${entries.map(e=>`<p class="preserve"><strong>${esc(e.result?.tipo||'Pendiente')}</strong> · ${esc(e.text)}</p>`).join('')}`;card.append(details);if(tasks.length)card.append(button('Abrir tareas',()=>api.openBoard()));list.append(card);
   }
 }
-document.querySelectorAll('[data-minutes]').forEach(b=>b.onclick=()=>{if(focusSession){notify('Termina o cancela el bloque actual antes de cambiar el tiempo.');return;}minutes=Number(b.dataset.minutes);document.querySelectorAll('[data-minutes]').forEach(x=>x.classList.toggle('selected',x===b));action(loadRecommendation);});
+root.querySelectorAll('[data-minutes]').forEach(b=>b.onclick=()=>{if(focusSession){notify('Termina o cancela el bloque actual antes de cambiar el tiempo.');return;}minutes=Number(b.dataset.minutes);document.querySelectorAll('[data-minutes]').forEach(x=>x.classList.toggle('selected',x===b));action(loadRecommendation);});
 async function loadRecommendation(){
   if(focusSession){renderFocus();return;}
   selectedTask=await call('studyRecommend',minutes);renderFocus();
@@ -80,3 +77,5 @@ setInterval(tick,1000);
 api.on('study-updated',s=>{state=s;render();});api.on('study-tab',tab);api.on('board-tasks-updated',()=>{if(!$('focus-view').hidden&&!focusSession)action(loadRecommendation);});
 window.addEventListener('online',()=>api.studyOnline());
 action(async()=>{state=await call('studyState');render();});
+
+})();

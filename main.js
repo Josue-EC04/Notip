@@ -107,7 +107,8 @@ let hiddenByFullscreen = false;
 const userDataPath = app.getPath('userData');
 
 // Bóveda de notas: en desarrollo usa ./vault, empaquetado usa userDataPath/vault para permisos de escritura
-const defaultVault = app.isPackaged ? path.join(userDataPath, 'vault') : path.join(__dirname, 'vault');
+const launchVault = process.argv.find(arg => arg.startsWith('--vault-path='))?.slice('--vault-path='.length);
+const defaultVault = launchVault ? path.resolve(launchVault) : app.isPackaged ? path.join(userDataPath, 'vault') : path.join(__dirname, 'vault');
 const vaultPath = process.env.NOTIP_DATA_PATH ? path.join(userDataPath, 'vault') : store.get('vaultPath', defaultVault);
 const dataPath  = path.join(userDataPath, 'data');
 
@@ -427,7 +428,7 @@ function createCaptureWindow() {
 
   captureWindow.on('blur', () => {
     setTimeout(() => {
-      if (captureWindow?.isVisible() && !captureWindow.isFocused()) {
+      if (captureWindow && !captureWindow.isDestroyed() && captureWindow.isVisible() && !captureWindow.isFocused()) {
         try {
           captureWindow.webContents.send('request-close');
         } catch (_) {
@@ -644,7 +645,7 @@ function showCapture() {
   
   // Re-confirmar posición tras el paint inicial de Windows DWM
   setTimeout(() => {
-    if (captureWindow && captureWindow.isVisible() && petWindow) {
+    if (captureWindow && !captureWindow.isDestroyed() && captureWindow.isVisible() && petWindow && !petWindow.isDestroyed()) {
       const [curPx, curPy] = petWindow.getPosition();
       positionCaptureNearPet(curPx, curPy);
       petWindow.setAlwaysOnTop(true, 'pop-up-menu');
@@ -878,6 +879,8 @@ ipcMain.on('show-pet-menu', () => {
     { label: `Notip (${userEmail})`, enabled: false },
     { type: 'separator' },
     { label: 'Nueva captura / Chat (Ctrl+Shift+N)', click: () => showCapture() },
+    { label: 'Mis clases', click: () => study.show('classes') },
+    { label: 'Tengo 15 minutos', click: () => study.show('focus') },
     { label: 'Tablero Kanban (Ctrl+Shift+K)', click: () => showBoard() },
     { label: 'El Cerebro (Grafo 2D/3D)', click: () => showBrain() },
     { label: 'Pizarra Canvas (Ctrl+Shift+P)', click: () => showCanvas() },
@@ -1484,6 +1487,12 @@ const study = require('./src/study/registerStudy')({
   app, ipcMain, BrowserWindow, store, vaultPath, dataPath,
   preload: path.join(__dirname, 'preload.js'), icon: appIconPath,
   onLocalLogin: onLoginSuccess,
+  onOpen: tab => {
+    showCapture();
+    const send = () => captureWindow?.webContents.send('study-tab', tab);
+    if (captureWindow?.webContents.isLoading()) captureWindow.webContents.once('did-finish-load', send);
+    else send();
+  },
   onTasksChanged: () => { captureWindow?.webContents.send('tasks-updated'); notifyBoardTasksUpdated(); },
   onNotesChanged: () => { notifyBrainNotesUpdated(); notifyCanvasNotesUpdated(); },
 });

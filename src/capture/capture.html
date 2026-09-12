@@ -9,6 +9,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="capture.css" />
+  <link rel="stylesheet" href="chatTools.css" />
 </head>
 <body>
   <div id="panel">
@@ -81,7 +82,7 @@
 
     <!-- VIEW 1: CAPTURA RÁPIDA & CHAT CON NOTIP -->
     <div id="view-capture" class="panel-view">
-      <div class="study-strip"><button id="btn-study-inbox">Por organizar <span id="study-pending">0</span></button><button id="btn-study-class">Iniciar clase</button><span id="study-local-status">Guardado local</span></div>
+      <div class="study-strip"><button id="btn-study-inbox">Por organizar <span id="study-pending">0</span></button><button id="btn-study-class">Iniciar clase</button><button id="btn-study-focus">Tengo 15 minutos</button><span id="study-local-status">Guardado local</span></div>
       <!-- Banner indicador cuando se está editando/continuando una nota activa -->
       <div id="active-note-banner" class="active-note-banner hidden">
         <div class="active-note-info">
@@ -156,6 +157,28 @@
       </div>
 
       <!-- DYNAMIC LOWER CONSOLE -->
+      <div id="chat-tools" hidden><div class="tool-heading"><strong id="tool-title">Herramientas del chat</strong><button id="close-chat-tools" type="button">Volver al chat</button></div>
+<header class="top"><span id="connection" role="status">Guardado local disponible</span><button id="pause-ai" class="quiet">Pausar IA</button></header>
+<div id="message" role="status" aria-live="polite" hidden></div>
+<section id="inbox-view" class="view">
+<div class="tool-heading"><h2>Pendientes</h2><button id="retry">Organizar ahora</button></div>
+<p class="footnote">Escribe en el chat de arriba. Todo se guarda aunque no tengas internet.</p>
+<div class="list-heading"><input id="inbox-search" type="search" placeholder="Buscar capturas…" aria-label="Buscar capturas"><label class="check"><input id="show-done" type="checkbox"> Ver organizadas</label></div>
+<div id="inbox-list" class="stack"></div>
+</section>
+<section id="classes-view" class="view" hidden>
+
+<form id="class-form" class="session-start"><label for="class-name">¿Qué vas a estudiar?</label><div class="row"><input id="class-name" maxlength="100" placeholder="Redes · Subnetting" required><button class="primary">Iniciar clase</button></div></form>
+<div id="active-class" class="active-session" hidden></div><div id="class-list" class="stack"></div>
+</section>
+<section id="focus-view" class="view" hidden>
+
+<div class="time-options" aria-label="Tiempo disponible"><button data-minutes="5">5 min</button><button data-minutes="15" class="selected">15 min</button><button data-minutes="30">30 min</button><button data-minutes="60">60 min</button></div>
+<div id="recommendation"></div><p class="footnote">La propuesta considera fecha de entrega, prioridad y duración. Funciona sin internet.</p>
+</section>
+<dialog id="edit-dialog"><form id="edit-form"><h2>Editar captura pendiente</h2><p>Se organizará esta versión. El original se conserva.</p><textarea id="edit-text" rows="7" maxlength="20000" required></textarea><div class="row end"><button type="button" id="edit-cancel">Cancelar</button><button class="primary">Guardar cambios</button></div></form></dialog>
+<dialog id="related-dialog"><h2 id="related-title"></h2><p id="related-content" class="preserve"></p><button id="related-close">Cerrar</button></dialog>
+</div>
       <div id="capture-dynamic-area">
         <!-- ESTADO A: ZERO STATE (Sugerencias + Actividad Reciente) -->
         <div id="section-zero-state">
@@ -320,5 +343,6 @@
   </div>
 
   <script src="capture.js"></script>
+  <script src="chatTools.js"></script>
 </body>
 </html>

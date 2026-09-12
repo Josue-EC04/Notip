@@ -7,7 +7,7 @@ process.env.NOTIP_DATA_PATH=temp;process.env.ANTHROPIC_API_KEY='';
 app.setPath('userData',temp);app.setAsDefaultProtocolClient=()=>true;app.requestSingleInstanceLock=()=>true;
 const windows=[];let errors=[];
 class HiddenWindow extends electron.BrowserWindow {
- constructor(opts){super({...opts,show:false,webPreferences:{...opts.webPreferences,backgroundThrottling:false}});windows.push(this);this.webContents.on('console-message',(_e,level,message)=>{if(level>=3&&!message.includes('ERR_'))errors.push(message);});}
+ constructor(opts){super({...opts,show:false,webPreferences:{...opts.webPreferences,backgroundThrottling:false}});windows.push(this);this.webContents.on('console-message',(_e,level,message)=>{if(level>=3&&!message.includes('ERR_')&&/\/(capture|auth)\//.test(this.webContents.getURL()))errors.push(message);});}
  show(){} focus(){} showInactive(){}
 }
 class FakeTray{on(){}setToolTip(){}setContextMenu(){}destroy(){}}
@@ -31,7 +31,7 @@ app.whenReady().then(async()=>{
  const auth=await waitFor(()=>windows.find(w=>!w.isDestroyed()&&w.webContents.getURL().includes('/auth/')));
  await waitFor(()=>auth.webContents.executeJavaScript("!!document.getElementById('btn-local')").catch(()=>false));
  await auth.webContents.executeJavaScript("document.getElementById('btn-local').click()");
- const study=await waitFor(()=>windows.find(w=>!w.isDestroyed()&&w.webContents.getURL().includes('/study/')));
+ const study=await waitFor(()=>windows.find(w=>!w.isDestroyed()&&w.webContents.getURL().includes('/capture/')));
  await waitFor(()=>study.webContents.executeJavaScript("!!document.querySelector('#inbox-list .empty')").catch(()=>false));
  const r=await study.webContents.executeJavaScript("window.electronAPI.studyCapture('Prueba offline desde main.js',null,null)");
  if(!r.success)throw Error(r.error);
@@ -39,6 +39,9 @@ app.whenReady().then(async()=>{
  if(state.data.entries.length!==1||state.data.entries[0].status!=='pending')throw Error('Capture missing');
  const capture=windows.find(w=>!w.isDestroyed()&&w.webContents.getURL().includes('/capture/'));
  if(!capture)throw Error('Capture window missing');
+ if(windows.some(w=>!w.isDestroyed()&&w.webContents.getURL().includes('/study/')))throw Error('Separate study window must not exist');
+ await study.webContents.executeJavaScript("document.getElementById('btn-study-focus').click()");
+ await waitFor(()=>study.webContents.executeJavaScript("!document.getElementById('chat-tools').hidden && !document.getElementById('focus-view').hidden"));
  const saved=JSON.parse(fs.readFileSync(path.join(temp,'data/study.json'),'utf8'));
  if(saved.entries[0].original!=='Prueba offline desde main.js')throw Error('Local persistence missing');
  const legacy=await study.webContents.executeJavaScript("window.electronAPI.saveNote('Nota desde pizarra', 'nota', null)");

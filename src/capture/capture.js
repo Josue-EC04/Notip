@@ -874,6 +874,7 @@ window.electronAPI.on('switch-tab', () => {
 });
 
 document.getElementById('btn-study-inbox').onclick = () => window.electronAPI.openStudy('inbox');
+document.getElementById('btn-study-focus').onclick = () => window.electronAPI.openStudy('focus');
 document.getElementById('btn-study-class').onclick = () => window.electronAPI.openStudy('classes');
 function updateStudyStrip(state) {
   document.getElementById('study-pending').textContent = state.entries.filter(e => e.status !== 'done').length;

@@ -9,7 +9,7 @@ Implementado en `feat/modo-estudiante`, separado de `main`. La rama conserva com
 3. **Tengo 15 minutos.** Recomienda una tarea según urgencia, prioridad y duración. Incluye un primer paso editable y bloques de 5, 15, 30 o 60 minutos. El temporizador continúa al reabrir la ventana. Terminar un bloque no marca automáticamente la tarea como hecha. Esta función funciona sin IA y sin internet.
 4. **Notas relacionadas.** Sugiere hasta dos notas con términos relevantes en común y explica la coincidencia. Puedes leer una vista previa y guardar la conexión. La búsqueda es local; no consume llamadas a la IA.
 
-Las cuatro funciones comparten una ventana con tres secciones para mantener la captura rápida sencilla. Ábrela desde los nuevos accesos de captura/tablero o con `Ctrl+Shift+E`.
+Las funciones están en el chat normal de la mascota. Debajo del encabezado aparecen «Por organizar», «Iniciar clase» y «Tengo 15 minutos». Las herramientas se abren dentro del mismo panel y mantienen el cuadro habitual de escritura. «Volver al chat» recupera la conversación. El guardado offline es automático: no hay una ventana offline separada. Los accesos del menú de la mascota y del tablero también abren este chat; `Ctrl+Shift+E` muestra sus pendientes.
 
 ## Probar la rama sin tocar tus notas normales
 
