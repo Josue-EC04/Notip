@@ -22,7 +22,15 @@ function render(){
 function renderInbox(){
   const q=$('inbox-search').value.toLowerCase();const entries=state.entries.filter(e=>($('show-done').checked||e.status!=='done')&&`${e.text} ${e.result?.titulo_corto||''}`.toLowerCase().includes(q)).slice().reverse();
   const list=$('inbox-list');list.innerHTML='';
-  if(!entries.length){list.innerHTML=`<div class="empty"><h3>${q?'No hay coincidencias':'Una mente un poco más ligera.'}</h3><p>${q?'Prueba con otra palabra.':'Aquí verás lo pendiente. Activa “Ver organizadas” para recuperar tus capturas anteriores.'}</p></div>`;return;}
+  const doneCount = state.entries.filter(e => e.status === 'done').length;
+  if(!entries.length){
+    list.innerHTML=`<div class="empty"><h3>${q?'No hay coincidencias':'Una mente un poco más ligera.'}</h3><p>${q?'Prueba con otra palabra.':(doneCount ? 'No tienes pendientes por organizar; tus capturas ya fueron organizadas por la IA.' : 'Aquí verás lo pendiente. Activa “Ver organizadas” para recuperar tus capturas anteriores.')}</p>${!q && doneCount ? '<div class="row" style="margin-top:12px;gap:8px;justify-content:center;"><button type="button" id="btn-empty-return" class="primary" style="padding:6px 14px;border-radius:18px;font-size:12px;">Volver al chat</button><button type="button" id="btn-empty-done" style="padding:6px 14px;border-radius:18px;font-size:12px;">Ver organizadas ('+doneCount+')</button></div>' : ''}</div>`;
+    const bRet = list.querySelector('#btn-empty-return');
+    if (bRet) bRet.onclick = returnToChat;
+    const bDone = list.querySelector('#btn-empty-done');
+    if (bDone) bDone.onclick = () => { $('show-done').checked = true; renderInbox(); };
+    return;
+  }
   for(const e of entries){
     const card=document.createElement('article');card.className='card';
     const session=state.sessions.find(s=>s.id===e.sessionId);

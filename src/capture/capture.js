@@ -495,9 +495,15 @@ async function handleSave() {
     const response = await window.electronAPI.studyCapture(text, forcedType, activeNoteContext);
     if (!response?.success) throw Error(response?.error || 'No se pudo guardar.');
     const entry = response.data; lastCaptureId = entry.id;
+    const chatTools = document.getElementById('chat-tools');
+    if (chatTools && !chatTools.hidden) {
+      chatTools.hidden = true;
+      document.getElementById('view-capture')?.classList.remove('tools-open');
+    }
+    document.getElementById('capture-dynamic-area')?.classList.remove('hidden');
     sectionZeroState?.classList.add('hidden'); sectionChatStream?.classList.remove('hidden');
     appendUserMessage(text);
-    appendNotipResponse({tipo:'sin_clasificar',titulo:'Captura guardada',mensaje_feedback:'Ya está en Por organizar. Puedes seguir escribiendo aunque no tengas internet.'});
+    appendNotipResponse({tipo:'sin_clasificar',titulo:'Captura guardada',mensaje_feedback:'Guardada en tu equipo. Notip está organizando con Claude…'});
     if (input.value.trim() === text) input.value = '';
     localStorage.removeItem('notip_input_draft');
     activeNoteContext = null; updateActiveNoteUI(null);
@@ -812,7 +818,7 @@ function showToast(msg, isError = false) {
     if (toastSvgError) toastSvgError.classList.add('hidden');
   }
 
-  toastTimer = setTimeout(() => toast.classList.add('hidden'), 3000);
+  toastTimer = setTimeout(() => toast.classList.add('hidden'), 5000);
 }
 
 function hideToast() {
@@ -895,6 +901,14 @@ window.electronAPI.on('study-organized', async entry => {
     updateActiveNoteUI(activeNoteContext); saveChatToStorage();
   }
   showToast(entry.source === 'manual' ? 'Organizada manualmente' : 'Captura organizada con IA');
+  const chatTools = document.getElementById('chat-tools');
+  if (chatTools && !chatTools.hidden) {
+    const msg = document.getElementById('message');
+    if (msg) {
+      msg.textContent = '✓ Tu nota fue organizada por la IA. Pulsa "Volver al chat" para verla.';
+      msg.hidden = false;
+    }
+  }
   try {
     const response = await window.electronAPI.studyRelated(r.texto_reescrito,entry.filename);
     if (!response.success || !response.data.length) return;

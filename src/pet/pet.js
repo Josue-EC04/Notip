@@ -315,6 +315,7 @@ function applyDockClass() {
 
 // ── Speech bubble ─────────────────────────────────────────────────────────────
 let bubbleTimer = null;
+let isHoveringBubble = false;
 
 function showBubble(msg, duration) {
   clearTimeout(bubbleTimer);
@@ -324,15 +325,32 @@ function showBubble(msg, duration) {
   bubble.style.opacity = currentOpacity;
   bubble.classList.remove('hidden');
   
-  // Duración inteligente: al menos 3.5s o más si el texto es largo para lectura cómoda
-  const readDuration = duration || Math.max(3500, msg.length * 85);
-  bubbleTimer = setTimeout(hideBubble, readDuration);
+  // Duración cómoda para leer: al menos 10 segundos o más según la longitud del texto
+  const readDuration = duration ? Math.max(duration, 10000) : Math.max(10000, msg.length * 120);
+  bubbleTimer = setTimeout(() => {
+    if (!isHoveringBubble) hideBubble();
+  }, readDuration);
 }
 
 function hideBubble() {
   clearTimeout(bubbleTimer);
   bubble.classList.add('hidden');
 }
+
+if (bubble) {
+  bubble.addEventListener('mouseenter', () => {
+    isHoveringBubble = true;
+    clearTimeout(bubbleTimer);
+  });
+  bubble.addEventListener('mouseleave', () => {
+    isHoveringBubble = false;
+    bubbleTimer = setTimeout(hideBubble, 3000);
+  });
+  bubble.addEventListener('click', () => {
+    hideBubble();
+  });
+}
+
 
 // Mensajes periódicos inteligentes
 setInterval(() => {
