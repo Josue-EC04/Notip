@@ -7,7 +7,6 @@ const listenerMap = new Map();
 contextBridge.exposeInMainWorld('electronAPI', {
   // Estudio: todas las capturas se guardan antes de llamar a IA.
   openStudy: (tab) => ipcRenderer.send('open-study', tab),
-  authLocal: () => ipcRenderer.invoke('auth-local'),
   studyOnline: () => ipcRenderer.send('study-online'),
   studyState: () => ipcRenderer.invoke('study-state'),
   studyCapture: (text, type, context) => ipcRenderer.invoke('study-capture', text, type, context),

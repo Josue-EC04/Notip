@@ -37,7 +37,6 @@ module.exports=function registerStudy({app,ipcMain,BrowserWindow,store,vaultPath
     const task=db.updateTask(Number(id),{duracion_min:Number(minutes),primer_paso:String(step||'').slice(0,500)});
     if(!task) throw Error('La tarea ya no existe.');onTasksChanged();return task;
   }));
-  ipcMain.handle('auth-local',async()=>{store.set('local_mode',true);onLocalLogin();show();return {success:true};});
   ipcMain.on('study-online',()=>wake(true));
   return {
     init(){

@@ -1528,39 +1528,17 @@ app.whenReady().then(async () => {
     return;
   }
 
-  if (store.get('local_mode', false)) { onLoginSuccess(); return; }
-  // Show a usable local entrance immediately; a slow network must not block capture.
-  createAuthWindow();
-  // Verificar si hay una sesión activa de Supabase (renovándola con refresh_token si expiró)
-  const { restoreOrRefreshSession, getStoredUser } = require('./src/supabase/client');
-  const session = await restoreOrRefreshSession();
-  const user = session?.user || getStoredUser();
+  store.delete('local_mode'); // Retire the old guest entrance, including saved preferences.
+  const { getStoredSession, restoreOrRefreshSession } = require('./src/supabase/client');
+  const remembered = getStoredSession();
+  if (!remembered) { createAuthWindow(); return; }
+  currentProviderToken = remembered.provider_token || store.get('notip-provider-token') || null;
+  onLoginSuccess();
+  // Open immediately from the remembered session; refresh never blocks offline work.
+  restoreOrRefreshSession().then(session => {
+    if (!session && petWindow && !petWindow.isDestroyed()) performLogout();
+  }).catch(err => console.warn('[auth] Keeping local access while offline:', err.message));
 
-  if (user && !petWindow) {
-    study.resume();
-    if (authWindow && !authWindow.isDestroyed()) { authWindow.removeAllListeners('close'); authWindow.destroy(); authWindow = null; }
-    // ✅ Sesión válida → abrir app directamente
-    console.log('[main] Sesión activa para:', user.email);
-    // Restaurar provider token de Calendar si existe
-    currentProviderToken = session?.provider_token || store.get('notip-provider-token') || null;
-    createPetWindow();
-    createCaptureWindow();
-    createBoardWindow();
-    createBrainWindow();
-    createTray();
-    setupGlobalShortcut();
-    setupFullscreenWatcher();
-
-    // Sincronizar datos locales con Supabase en segundo plano
-    try {
-      const { syncAllLocalToCloud } = require('./src/sync/syncManager');
-      syncAllLocalToCloud(vaultPath, dataPath).catch(err => console.warn('[sync] syncAllLocalToCloud error:', err.message));
-    } catch (_) {}
-  } else {
-    // 🔐 Sin sesión → mostrar pantalla de login
-    console.log('[main] Sin sesión — mostrando login');
-    if (!petWindow) createAuthWindow();
-  }
 });
 
 // macOS: manejar deep link cuando la app ya está abierta

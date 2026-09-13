@@ -1,25 +1,25 @@
 # Notip: modo estudiante
 
-Implementado en `feat/modo-estudiante`, separado de `main`. La rama conserva como base las correcciones de Antigravity que estaban presentes al iniciar el trabajo.
+Las funciones originales se implementaron en `feat/modo-estudiante` y después se integraron con los ajustes de Antigravity. La corrección del acceso está en `fix/google-login-offline-session`; consulta [Inicio de sesión y uso sin conexión](LOGIN_Y_USO_SIN_CONEXION.md).
 
 ## Qué incluye
 
-1. **Bandeja sin internet.** Cada captura se guarda primero en este equipo. La bandeja muestra pendientes, errores y notas organizadas; permite editar, eliminar o elegir un tipo manualmente. La IA reintenta al recuperar conexión, al abrir la aplicación y periódicamente mientras esté abierta. También puedes pulsar «Reintentar». No requiere iniciar sesión para guardar.
+1. **Bandeja sin internet.** Cada captura se guarda primero en este equipo. La bandeja muestra pendientes, errores y notas organizadas; permite editar, eliminar o elegir un tipo manualmente. La IA reintenta al recuperar conexión, al abrir la aplicación y periódicamente mientras esté abierta. Después de iniciar sesión con Google una vez, puedes guardar sin internet mientras conserves esa sesión en este equipo.
 2. **Modo clase.** Inicia una clase, captura apuntes y termina la sesión. Cuando sus capturas estén organizadas, la IA prepara un resumen, conceptos, dudas y preguntas de repaso. Las tareas quedan en el tablero. La clase activa sobrevive al cierre de la aplicación.
 3. **Tengo 15 minutos.** Recomienda una tarea según urgencia, prioridad y duración. Incluye un primer paso editable y bloques de 5, 15, 30 o 60 minutos. El temporizador continúa al reabrir la ventana. Terminar un bloque no marca automáticamente la tarea como hecha. Esta función funciona sin IA y sin internet.
 4. **Notas relacionadas.** Sugiere hasta dos notas con términos relevantes en común y explica la coincidencia. Puedes leer una vista previa y guardar la conexión. La búsqueda es local; no consume llamadas a la IA.
 
 Las funciones están en el chat normal de la mascota. Debajo del encabezado aparecen «Por organizar», «Iniciar clase» y «Tengo 15 minutos». Las herramientas se abren dentro del mismo panel y mantienen el cuadro habitual de escritura. «Volver al chat» recupera la conversación. El guardado offline es automático: no hay una ventana offline separada. Los accesos del menú de la mascota y del tablero también abren este chat; `Ctrl+Shift+E` muestra sus pendientes.
 
-## Probar la rama sin tocar tus notas normales
+## Abrir la versión actual
 
-Desde `C:\Users\HOME\Desktop\Notip\scratch\modo-estudiante`:
+Usa el acceso directo habitual o ejecuta desde `C:\Users\HOME\Desktop\Notip`:
 
 ```powershell
-npm.cmd run preview
+npm.cmd start
 ```
 
-La vista previa usa su propio perfil en `scratch/preview-data`, incluidas sus notas y tareas. Cierra otra instancia de Notip antes de iniciarla. Selecciona «Continuar en este equipo · sin internet». Para clasificar necesitas una clave de Anthropic configurada en ajustes o en tu `.env` local. Las claves no se incluyen en el instalador.
+Cierra otra instancia de Notip antes de iniciarla. Entra con Google la primera vez; los siguientes arranques recordarán la sesión. Se usan tus notas habituales. Para pruebas aisladas, `npm.cmd run test:ui` usa datos temporales y no requiere una cuenta real. Para clasificar necesitas una clave de Anthropic configurada en ajustes o en tu `.env` local. Las claves no se incluyen en el instalador.
 
 ## Demostración para la minihackatón
 

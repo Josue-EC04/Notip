@@ -85,6 +85,7 @@ btnClose.addEventListener('click', () => {
 
 // ─── Login con Google ────────────────────────────────────────────────────────
 btnGoogleLogin.addEventListener('click', async () => {
+  if (!navigator.onLine) { showError('Conéctate a internet para iniciar sesión con Google por primera vez o después de cerrar sesión.'); return; }
   hideError();
   showStatus('Abriendo el navegador de Google…');
   btnGoogleLogin.disabled = true;
@@ -131,7 +132,12 @@ function hideError() {
   errorBanner.style.display = 'none';
 }
 
-document.getElementById('btn-local').addEventListener('click', async () => {
-  try { const result = await window.electronAPI.authLocal(); if (!result.success) showError(result.error || 'No se pudo abrir el modo local.'); }
-  catch (err) { showError(err.message); }
-});
+function updateConnectionHelp() {
+  document.getElementById('connection-help').textContent = navigator.onLine
+    ? 'Inicia sesión con Google una vez. Después podrás usar tus notas sin conexión en este equipo.'
+    : 'Sin conexión. Para entrar por primera vez o después de cerrar sesión, conecta internet e inicia sesión con Google.';
+  if (navigator.onLine) btnGoogleLogin.disabled = false;
+}
+window.addEventListener('online', updateConnectionHelp);
+window.addEventListener('offline', updateConnectionHelp);
+updateConnectionHelp();

@@ -1,13 +1,17 @@
 // Loads production main.js. Only OS side effects and network services are substituted.
 const electron=require('electron');const {app,ipcMain}=electron;
+process.on('uncaughtException', error => { console.error(error.stack); app.exit(1); });
 const fs=require('fs'),path=require('path'),os=require('os'),Module=require('module');
 const {EventEmitter}=require('events');
 const root=path.resolve(__dirname,'..'),temp=fs.mkdtempSync(path.join(os.tmpdir(),'notip-boot-'));
 process.env.NOTIP_DATA_PATH=temp;process.env.ANTHROPIC_API_KEY='';
 app.setPath('userData',temp);app.setAsDefaultProtocolClient=()=>true;app.requestSingleInstanceLock=()=>true;
+const firstLogin=process.argv.includes('--first-login');
+let remembered=firstLogin?null:{user:{id:'test-google-user',email:'test@example.invalid'},access_token:'test',refresh_token:'test-refresh'};
+new (require('electron-store'))().set('local_mode',true);
 const windows=[];let errors=[];
 class HiddenWindow extends electron.BrowserWindow {
- constructor(opts){super({...opts,show:false,webPreferences:{...opts.webPreferences,backgroundThrottling:false}});windows.push(this);this.webContents.on('console-message',(_e,level,message)=>{if(level>=3&&!message.includes('ERR_')&&/\/(capture|auth)\//.test(this.webContents.getURL()))errors.push(message);});}
+ constructor(opts){super({...opts,show:false,webPreferences:{...opts.webPreferences,backgroundThrottling:false}});windows.push(this);this.webContents.on('console-message',(_e,level,message)=>{if(!this.isDestroyed()&&!this.webContents.isDestroyed()&&level>=3&&!message.includes('ERR_')&&/\/(capture|auth)\//.test(this.webContents.getURL()))errors.push(message);});}
  show(){} focus(){} showInactive(){}
 }
 class FakeTray{on(){}setToolTip(){}setContextMenu(){}destroy(){}}
@@ -18,7 +22,7 @@ Module._load=function(id,parent,isMain){
   if(id==='electron')return {...electron,BrowserWindow:HiddenWindow,Tray:FakeTray,globalShortcut:{register:()=>true,unregisterAll(){}}};
   if(id==='dotenv')return {config(){}};
   if(id==='./src/utils/fullscreenWatcher')return watcher;
-  if(id==='./src/supabase/client')return {restoreOrRefreshSession:async()=>null,getStoredUser:()=>null,getStoredSession:()=>null,signOut:async()=>{}};
+  if(id==='./src/supabase/client')return {restoreOrRefreshSession:()=>new Promise(()=>{}),getStoredUser:()=>remembered?.user,getStoredSession:()=>remembered,signOut:async()=>{remembered=null;}};
   if(id==='./src/sync/syncManager')return {syncAllLocalToCloud:async()=>{},getCredits:async()=>null};
  }
  return load.call(this,id,parent,isMain);
@@ -28,11 +32,17 @@ async function waitFor(fn){for(let i=0;i<120;i++){const r=await fn();if(r)return
 const timeout=setTimeout(()=>{console.error('BOOT TIMEOUT');app.exit(1);},20000);
 require('../main.js');
 app.whenReady().then(async()=>{
- const auth=await waitFor(()=>windows.find(w=>!w.isDestroyed()&&w.webContents.getURL().includes('/auth/')));
- await waitFor(()=>auth.webContents.executeJavaScript("!!document.getElementById('btn-local')").catch(()=>false));
- await auth.webContents.executeJavaScript("document.getElementById('btn-local').click()");
+ if(firstLogin){
+  const auth=await waitFor(()=>windows.find(w=>!w.isDestroyed()&&w.webContents.getURL().includes('/auth/')));
+  await waitFor(()=>auth.webContents.executeJavaScript("!!document.getElementById('btn-google-login')").catch(()=>false));
+  if(await auth.webContents.executeJavaScript("!!document.getElementById('btn-local') || typeof window.electronAPI.authLocal === 'function'"))throw Error('Guest entrance remains');
+  if(windows.some(w=>w.webContents.getURL().includes('/capture/')))throw Error('Legacy local_mode bypassed login');
+  console.log('BOOT PASS: first login requires Google; legacy guest preference cannot bypass it.');
+  clearTimeout(timeout);app.exit(0);return;
+ }
  const study=await waitFor(()=>windows.find(w=>!w.isDestroyed()&&w.webContents.getURL().includes('/capture/')));
  await waitFor(()=>study.webContents.executeJavaScript("!!document.querySelector('#inbox-list .empty')").catch(()=>false));
+ if(windows.some(w=>!w.isDestroyed()&&w.webContents.getURL().includes('/auth/')))throw Error('Remembered session showed login');
  const r=await study.webContents.executeJavaScript("window.electronAPI.studyCapture('Prueba offline desde main.js',null,null)");
  if(!r.success)throw Error(r.error);
  const state=await study.webContents.executeJavaScript('window.electronAPI.studyState()');
@@ -52,6 +62,10 @@ app.whenReady().then(async()=>{
  await study.webContents.executeJavaScript(`window.electronAPI.deleteNote(${JSON.stringify(legacy.filename)})`);
  if(JSON.parse(fs.readFileSync(path.join(temp,'data/study.json'),'utf8')).entries.some(e=>e.filename===legacy.filename))throw Error('Deleted note remained queued');
  if(errors.length)throw Error(errors.join('\n'));
- console.log('BOOT PASS: production main, local entrance, all windows, IPC and offline persistence.');
+ await study.webContents.executeJavaScript('void window.electronAPI.authLogout(); true').catch(()=>{});
+ const login=await waitFor(()=>windows.find(w=>!w.isDestroyed()&&w.webContents.getURL().includes('/auth/')));
+ if(remembered!==null)throw Error('Logout kept remembered session');
+ if(windows.some(w=>!w.isDestroyed()&&w.webContents.getURL().includes('/capture/')))throw Error('Logout kept chat open');
+ console.log('BOOT PASS: remembered session opens offline without login; capture persists; logout returns to Google.');
  clearTimeout(timeout);app.quit();
 }).catch(e=>{console.error(e.stack);clearTimeout(timeout);app.exit(1);});

@@ -64,9 +64,11 @@ function getSupabaseClient() {
  */
 function getStoredSession() {
   try {
+    if (store.get('signed-out', false)) return null;
     const raw = store.get('sb-session');
     if (!raw) return null;
-    return typeof raw === 'string' ? JSON.parse(raw) : raw;
+    const session = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    return session?.user?.id && session.access_token && session.refresh_token ? session : null;
   } catch { return null; }
 }
 
@@ -102,7 +104,7 @@ async function restoreOrRefreshSession() {
         refresh_token: session.refresh_token || '',
       });
     } catch (_) {}
-    return session;
+    return getStoredSession();
   }
 
   // Si ha expirado pero tenemos refresh_token, renovar con Supabase
@@ -115,6 +117,7 @@ async function restoreOrRefreshSession() {
 
       if (!error && data?.session) {
         console.log('[auth] Sesión renovada con éxito para:', data.session.user?.email);
+        if (getStoredSession()?.refresh_token !== session.refresh_token) return getStoredSession();
         storeSession(data.session);
         return data.session;
       }
@@ -124,8 +127,8 @@ async function restoreOrRefreshSession() {
         // Si el token fue revocado definitivamente en el servidor:
         if (error.message.includes('Invalid Refresh Token') || error.message.includes('Already Used')) {
           console.warn('[auth] Refresh token inválido en el servidor. Requiere nuevo login.');
-          storeSession(null);
-          return null;
+          if (getStoredSession()?.refresh_token === session.refresh_token) storeSession(null);
+          return getStoredSession();
         }
       }
     } catch (err) {
@@ -134,7 +137,7 @@ async function restoreOrRefreshSession() {
   }
 
   // Si falló por falta de conexión o red temporal, conservamos la sesión local para modo offline
-  return session;
+  return getStoredSession();
 }
 
 /**
@@ -142,8 +145,10 @@ async function restoreOrRefreshSession() {
  */
 function storeSession(session) {
   if (session) {
+    store.delete('signed-out');
     store.set('sb-session', session);
   } else {
+    store.set('signed-out', true);
     store.delete('sb-session');
   }
 }
@@ -152,13 +157,14 @@ function storeSession(session) {
  * Cierra la sesión local y en Supabase.
  */
 async function signOut() {
+  // Clear remembered access before any network request, including when offline.
+  storeSession(null);
   try {
     const sb = getSupabaseClient();
-    if (sb) await sb.auth.signOut();
+    if (sb) void sb.auth.signOut({ scope: 'local' }).catch(e => console.warn('[auth] Remote logout unavailable:', e.message));
   } catch (e) {
     console.error('[supabase] Error en signOut:', e);
   }
-  storeSession(null);
 }
 
 module.exports = {
