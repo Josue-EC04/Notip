@@ -18,6 +18,8 @@ async function run(){
  ipcMain.handle('get-tasks',()=>db.getTasks());ipcMain.handle('update-task-state',(_e,id,state)=>{const r=db.updateTaskState(id,state);broadcast();return r;});
  ipcMain.handle('get-notes-count',()=>require('../src/notes/notesManager').getAllNotes(path.join(temp,'vault')).length);
  ipcMain.handle('get-settings',()=>({user:null,credits:null,customKey:'',hasCustomKey:false}));
+ const externalCalls=[];let copiedQuestion='';let browserFails=false;
+ require('../src/study/externalQuestion')({ipcMain,clipboard:{writeText:text=>{copiedQuestion=text;}},shell:{openExternal:async url=>{if(browserFails)throw Error('Browser unavailable');externalCalls.push(url);}}});
  for(const channel of ['open-board','open-brain','open-canvas','close-capture'])ipcMain.on(channel,()=>{});
  const win=new BrowserWindow({width:440,height:560,show:false,webPreferences:{backgroundThrottling:false,preload:path.join(root,'preload.js'),contextIsolation:true,nodeIntegration:false}});
  win.webContents.on('console-message',(_event,level,message)=>{if(level>=3&&!message.includes('ERR_INTERNET')&&!message.includes('ERR_NAME'))failures.push(message);});
@@ -45,6 +47,28 @@ async function run(){
  await until(capture,"document.querySelector('.capture-status')?.textContent.includes('IA pausada')");
  assert.equal(await capture.webContents.executeJavaScript("document.querySelectorAll('.notip-comment').length"),0);
  await screenshot(capture,'02-captura.png');
+ await capture.webContents.executeJavaScript("Array.from(document.querySelectorAll('.resolve-question')).at(-1).click()");
+ assert.equal(await capture.webContents.executeJavaScript("document.getElementById('question-dialog').open"),true);
+ assert.match(await capture.webContents.executeJavaScript("document.getElementById('question-prompt').value"),/Entregar/);
+ assert.equal(externalCalls.length,0);assert.equal(copiedQuestion,'');
+ const editedQuestion='Explica esta duda con un ejemplo: redes /27 & <texto>\nNo cambies este contexto.';
+ await capture.webContents.executeJavaScript(`document.getElementById('question-prompt').value=${JSON.stringify(editedQuestion)};document.getElementById('question-copy').click()`);
+ await until(capture,"document.getElementById('question-status').textContent.includes('Consulta copiada')");
+ assert.equal(copiedQuestion,editedQuestion);assert.equal(externalCalls.length,0);
+ for(const provider of ['claude','gemini','chatgpt']) {
+  await capture.webContents.executeJavaScript(`document.getElementById('question-provider').value='${provider}';document.getElementById('question-provider').dispatchEvent(new Event('change'));document.getElementById('question-form').requestSubmit()`);
+  await until(capture,"document.getElementById('question-status').textContent.includes('En el navegador')");
+  assert.equal(copiedQuestion,editedQuestion);
+ }
+ assert.deepEqual(externalCalls,['https://claude.ai/new','https://gemini.google.com/app','https://chatgpt.com/']);
+ browserFails=true;
+ await capture.webContents.executeJavaScript("document.getElementById('question-form').requestSubmit()");
+ await until(capture,"document.getElementById('question-status').textContent.includes('no se pudo abrir')");
+ assert.equal(copiedQuestion,editedQuestion);browserFails=false;
+ await screenshot(capture,'06-resolver-duda.png');
+ await capture.webContents.executeJavaScript("document.getElementById('question-close').click();Array.from(document.querySelectorAll('.resolve-question')).at(-1).click()");
+ assert.equal(await capture.webContents.executeJavaScript("document.getElementById('question-prompt').value"),editedQuestion);
+ await capture.webContents.executeJavaScript("document.getElementById('question-close').click()");
  await win.webContents.executeJavaScript("document.getElementById('btn-study-class').click();document.getElementById('class-name').value='Redes · Subnetting';document.getElementById('class-form').requestSubmit()");
  await until(win,"document.getElementById('class-ribbon-open').textContent.includes('Redes')");
  for(const text of ['No entiendo cómo calcular equipos con máscara /27','Entregar ejercicios de subnetting']) {

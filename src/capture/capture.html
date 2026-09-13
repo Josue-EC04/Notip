@@ -299,6 +299,20 @@
     </div>
   </div>
 
+  <dialog id="question-dialog" aria-labelledby="question-title">
+    <form id="question-form">
+      <div class="question-heading"><h2 id="question-title">Resolver esta duda</h2><button id="question-close" type="button" aria-label="Cerrar consulta">✕</button></div>
+      <p>Revisa la consulta. La preparó Notip con una plantilla local, sin usar la API.</p>
+      <label for="question-prompt">Consulta que vas a copiar</label>
+      <textarea id="question-prompt" rows="9" maxlength="24000" required spellcheck="true"></textarea>
+      <label for="question-provider">Abrir en</label>
+      <select id="question-provider"><option value="claude">Claude</option><option value="gemini">Gemini</option><option value="chatgpt">ChatGPT</option></select>
+      <p class="question-hint">Se copiará el texto y se abrirá el sitio. Pega con Ctrl+V, inicia un chat nuevo si hace falta y envíalo tú. Se aplican los límites de tu cuenta.</p>
+      <p id="question-status" role="status" aria-live="polite"></p>
+      <div class="question-actions"><button type="button" id="question-copy">Solo copiar</button><button type="submit" id="question-open">Copiar y abrir Claude</button></div>
+    </form>
+  </dialog>
+  <script src="questionHelper.js"></script>
   <script src="capture.js"></script>
   <script src="chatTools.js"></script>
   <script src="chatExperience.js"></script>

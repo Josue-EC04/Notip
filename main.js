@@ -1208,6 +1208,7 @@ ipcMain.handle('add-calendar-event', async (_e, params) => {
 ipcMain.handle('open-external', (_e, url) => {
   if (url) shell.openExternal(url);
 });
+require('./src/study/externalQuestion')({ ipcMain, clipboard: require('electron').clipboard, shell });
 
 // Mover la mascota (arrastre fijado exactamente al cursor del mouse)
 let dragGrabOffsetX = 130;

@@ -82,6 +82,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   addCalendarEvent: (params)                   => ipcRenderer.invoke('add-calendar-event', params),
   /** Abre un link externo en el navegador predeterminado */
   openExternal:     (url)                      => ipcRenderer.invoke('open-external', url),
+  externalQuestion: (text, provider = null)    => ipcRenderer.invoke('external-question', text, provider),
 
   // ─── Settings & Custom API Key ───────────────────────────────────────────────
   getSettings:       ()                            => ipcRenderer.invoke('get-settings'),

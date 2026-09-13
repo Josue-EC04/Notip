@@ -46,3 +46,18 @@
 #classes-view:has(#class-list .card) { display: flex; flex-direction: column; }
 #classes-view:has(#class-list .card) .session-start { order: 2; }
 #capture-dynamic-area:has(#welcome-card:not([hidden])) #section-zero-state { display: none; }
+.resolve-question { border: 0; background: transparent; color: var(--primary); cursor: pointer; font: inherit; font-size: 11px; padding: 4px 0; }
+.capture-receipt .resolve-question { display: block; margin-top: 5px; }
+#question-dialog { margin: auto; width: calc(100% - 24px); max-width: 520px; max-height: calc(100% - 24px); padding: 16px; overflow-y: auto; border: 1px solid var(--border); border-radius: var(--r); background: var(--bg-deep); color: var(--text); font: inherit; }
+#question-dialog::backdrop { background: #1c191760; }
+.question-heading, .question-actions { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.question-heading h2 { font-size: 15px; }
+#question-dialog p { font-size: 11px; line-height: 1.55; color: var(--muted); margin: 9px 0; }
+#question-dialog label { display: block; font-size: 12px; margin: 8px 0 5px; }
+#question-dialog textarea { width: 100%; min-height: 140px; max-height: 230px; resize: vertical; padding: 10px; border: 1px solid var(--border); border-radius: 8px; background: white; color: var(--text); font: inherit; font-size: 12px; line-height: 1.5; }
+#question-dialog button, #question-dialog select { font: inherit; font-size: 12px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 7px; background: white; color: var(--text); cursor: pointer; }
+#question-dialog #question-open { background: var(--primary); color: white; border-color: var(--primary); }
+#question-dialog #question-status { color: var(--primary); }
+#question-dialog button:disabled { opacity: .5; cursor: wait; }
+#question-dialog textarea { height: min(180px, 28vh); min-height: 100px; }
+#question-dialog .question-actions { position: sticky; bottom: -16px; background: var(--bg-deep); padding: 10px 0 4px; border-top: 1px solid var(--border); }

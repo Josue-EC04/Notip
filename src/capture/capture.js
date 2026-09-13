@@ -712,6 +712,19 @@ function appendNotipResponse(result, save = true) {
     }
     row.querySelector('.receipt-open').onclick = () => result.pending ? window.electronAPI.openStudy('inbox') : tipo==='tarea' ? window.electronAPI.openBoard() : window.electronAPI.openCanvas();
     const continuation = row.querySelector('.continue-note');
+    const ask = document.createElement('button');
+    ask.type = 'button';
+    ask.className = 'resolve-question';
+    ask.textContent = 'Resolver esta duda';
+    ask.onclick = () => {
+      const entry = latestStudyState.entries.find(e=>e.id===result.captureId);
+      window.dispatchEvent(new CustomEvent('resolve-question', {detail:{
+        text:entry?.text || result.texto_reescrito || result.descripcion || result.titulo || '',
+        title:result.pending ? '' : result.titulo || result.titulo_corto || '',
+        course:result.curso || latestStudyState.sessions.find(s=>s.id===entry?.sessionId)?.name || '',
+      }}));
+    };
+    (row.querySelector('.receipt-actions') || row.querySelector('.capture-receipt')).append(ask);
     if(continuation) continuation.onclick = () => {
       if(latestStudyState.activeSessionId){showToast('Termina la clase antes de modificar una nota anterior.',true);return;}
       activeNoteContext = {...result,texto:result.texto_reescrito,explicit:true,timestamp:Date.now()};
