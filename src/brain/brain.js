@@ -13,9 +13,11 @@ let allNotes        = [];   // raw note objects from vault
 let activeFilter    = 'todas';
 let searchQuery     = '';
 let selectedNodeId  = null;
+let lastFoundNodeId = null;
 let physicsEnabled  = true;
 let focusModeActive = false;
 let currentEdges    = [];
+let initialFitDone  = false;
 
 // Connection mode
 let connectMode     = false;
@@ -444,145 +446,204 @@ function getEdgeBetween(nodeAId, nodeBId) {
   );
 }
 
+function focusAndHighlightFoundNode(targetId) {
+  if (!targetId) return;
+  selectedNodeId = targetId;
+  lastFoundNodeId = targetId;
+  flyToAndSelectNode(targetId);
+}
+
+function restoreNodeSelection(targetId) {
+  focusAndHighlightFoundNode(targetId);
+}
+
 function build2DGraph(nodes, edges) {
-  nodesDS = new vis.DataSet(nodes);
-  edgesDS = new vis.DataSet(edges);
+  if (!network) {
+    nodesDS = new vis.DataSet(nodes);
+    edgesDS = new vis.DataSet(edges);
 
-  const options = {
-    nodes: {
-      shape: 'dot',
-      borderWidth: 1.5,
-      borderWidthSelected: 2.5,
-      font: {
-        color: '#1C1917',
-        size: 11.5,
-        face: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-        strokeWidth: 0,
-        background: 'rgba(255, 255, 255, 0.95)',
-        borderWidth: 1,
-        borderColor: '#E8E3DA',
-        borderRadius: 6,
-        padding: 5,
-        vadjust: 6,
+    const options = {
+      nodes: {
+        shape: 'dot',
+        borderWidth: 1.5,
+        borderWidthSelected: 2.5,
+        fixed: {
+          x: false,
+          y: false,
+        },
+        font: {
+          color: '#1C1917',
+          size: 11.5,
+          face: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+          strokeWidth: 0,
+          background: 'rgba(255, 255, 255, 0.95)',
+          vadjust: 6,
+        },
+        shadow: {
+          enabled: true,
+          color: 'rgba(28, 25, 23, 0.08)',
+          size: 8,
+          x: 0, y: 2,
+        },
       },
-      shadow: {
-        enabled: true,
-        color: 'rgba(28, 25, 23, 0.08)',
-        size: 8,
-        x: 0, y: 2,
+      edges: {
+        color: {
+          color: 'rgba(120, 113, 108, 0.35)',
+          highlight: '#4F46E5',
+          hover: '#0284C7',
+        },
+        width: 1.5,
+        smooth: {
+          type: 'continuous',
+          roundness: 0.25,
+        },
+        shadow: {
+          enabled: false,
+        },
+        hoverWidth: 0.8,
       },
-    },
-    edges: {
-      color: {
-        color: 'rgba(120, 113, 108, 0.35)',
-        highlight: '#4F46E5',
-        hover: '#0284C7',
+      physics: {
+        enabled: physicsEnabled,
+        barnesHut: {
+          gravitationalConstant: -3600,
+          centralGravity: 0.15,
+          springLength: 180,
+          springConstant: 0.03,
+          damping: 0.10,
+          avoidOverlap: 0.45,
+        },
+        stabilization: {
+          iterations: 100,
+          fit: false,
+        },
       },
-      width: 1.5,
-      smooth: {
-        type: 'continuous',
-        roundness: 0.25,
+      interaction: {
+        dragNodes: true,
+        dragView: true,
+        zoomView: true,
+        hover: true,
+        selectable: true,
+        selectConnectedEdges: false,
+        tooltipDelay: 200,
+        multiselect: false,
+        navigationButtons: false,
+        keyboard: {
+          enabled: true,
+          bindToWindow: false,
+        },
       },
-      shadow: {
-        enabled: false,
+      layout: {
+        improvedLayout: true,
+        randomSeed: 42,
       },
-      hoverWidth: 0.8,
-    },
-    physics: {
-      enabled: physicsEnabled,
-      barnesHut: {
-        gravitationalConstant: -3600,
-        centralGravity: 0.15,
-        springLength: 180,
-        springConstant: 0.03,
-        damping: 0.10,
-        avoidOverlap: 0.45,
-      },
-      stabilization: {
-        iterations: 150,
-        fit: true,
-      },
-    },
-    interaction: {
-      hover: true,
-      tooltipDelay: 200,
-      multiselect: true,
-      navigationButtons: false,
-      keyboard: {
-        enabled: true,
-        bindToWindow: false,
-      },
-      zoomView: true,
-      dragView: true,
-    },
-    layout: {
-      improvedLayout: true,
-      randomSeed: 42,
-    },
-  };
+    };
 
-  if (network) {
-    network.destroy();
+    network = new vis.Network(graphCanvas, { nodes: nodesDS, edges: edgesDS }, options);
+
+    // Draw neural glow & auras before rendering elements
+    network.on('beforeDraw', (ctx) => {
+      drawNeuralGlow(ctx);
+    });
+
+    // ── Network events ─────────────────────────────────────────────────────────
+    network.on('click', (params) => {
+      if (connectMode) {
+        handleConnectClick(params);
+        return;
+      }
+      if (params.nodes.length === 1) {
+        selectNode(params.nodes[0]);
+      } else if (params.nodes.length === 0) {
+        deselectNode();
+      }
+    });
+
+    network.on('doubleClick', (params) => {
+      if (params.nodes.length === 1) {
+        openEditModal(params.nodes[0]);
+      }
+    });
+
+    network.on('hoverNode', () => {
+      graphCanvas.style.cursor = 'pointer';
+    });
+
+    network.on('blurNode', () => {
+      graphCanvas.style.cursor = 'default';
+    });
+
+    network.on('selectNode', (params) => {
+      if (!connectMode && params.nodes.length > 1) {
+        btnConnect.classList.remove('hidden');
+      }
+    });
+
+    network.on('deselectNode', () => {
+      if (!connectMode) {
+        btnConnect.classList.add('hidden');
+      }
+    });
+
+    network.on('dragEnd', () => {
+      try { saveBrainPositions(); } catch (_) {}
+    });
+
+    network.on('stabilizationIterationsDone', () => {
+      try { saveBrainPositions(); } catch (_) {}
+      if (!initialFitDone) {
+        initialFitDone = true;
+        const targetId = selectedNodeId || lastFoundNodeId;
+        if (targetId && nodesDS && nodesDS.get(targetId)) {
+          flyToAndSelectNode(targetId);
+        } else {
+          try {
+            network.fit({ animation: { duration: 400, easingFunction: 'easeInOutQuad' } });
+          } catch (_) {}
+        }
+      }
+    });
+
+    // Initial load fallback
+    setTimeout(() => {
+      if (!initialFitDone && network) {
+        initialFitDone = true;
+        const targetId = selectedNodeId || lastFoundNodeId;
+        if (targetId && nodesDS && nodesDS.get(targetId)) {
+          flyToAndSelectNode(targetId);
+        } else {
+          try { network.fit({ animation: { duration: 400 } }); } catch (_) {}
+        }
+      }
+    }, 160);
+
+  } else {
+    // Network already exists: preserve current node positions from canvas
+    const currentPositions = network.getPositions();
+    const existingNodeIds = new Set(nodesDS.getIds());
+    const incomingNodeIds = new Set(nodes.map(n => n.id));
+
+    // Remove nodes filtered out
+    const toRemove = [];
+    existingNodeIds.forEach(id => {
+      if (!incomingNodeIds.has(id)) toRemove.push(id);
+    });
+    if (toRemove.length > 0) {
+      nodesDS.remove(toRemove);
+    }
+
+    // Keep active positions for nodes so dragging isn't reset
+    nodes.forEach(n => {
+      if (currentPositions[n.id]) {
+        n.x = currentPositions[n.id].x;
+        n.y = currentPositions[n.id].y;
+      }
+    });
+    nodesDS.update(nodes);
+
+    // Sync edges
+    edgesDS.clear();
+    edgesDS.add(edges);
   }
-
-  network = new vis.Network(graphCanvas, { nodes: nodesDS, edges: edgesDS }, options);
-
-  // Draw neural glow & auras before rendering elements
-  network.on('beforeDraw', (ctx) => {
-    drawNeuralGlow(ctx);
-  });
-
-  // ── Network events ─────────────────────────────────────────────────────────
-  network.on('click', (params) => {
-    if (connectMode) {
-      handleConnectClick(params);
-      return;
-    }
-    if (params.nodes.length === 1) {
-      selectNode(params.nodes[0]);
-    } else if (params.nodes.length === 0) {
-      deselectNode();
-    }
-  });
-
-  network.on('doubleClick', (params) => {
-    if (params.nodes.length === 1) {
-      openEditModal(params.nodes[0]);
-    }
-  });
-
-  network.on('hoverNode', () => {
-    graphCanvas.style.cursor = 'pointer';
-  });
-
-  network.on('blurNode', () => {
-    graphCanvas.style.cursor = 'default';
-  });
-
-  network.on('selectNode', (params) => {
-    if (!connectMode && params.nodes.length > 1) {
-      btnConnect.classList.remove('hidden');
-    }
-  });
-
-  network.on('deselectNode', () => {
-    if (!connectMode) {
-      btnConnect.classList.add('hidden');
-    }
-  });
-
-  // Guardar posiciones al arrastrar nodos o estabilizar
-  network.on('dragEnd', () => {
-    try { saveBrainPositions(); } catch (_) {}
-  });
-
-  // Stabilization done → fit view & save positions
-  network.on('stabilizationIterationsDone', () => {
-    try { saveBrainPositions(); } catch (_) {}
-    try {
-      network.fit({ animation: { duration: 400, easingFunction: 'easeInOutQuad' } });
-    } catch (_) {}
-  });
 }
 
 // ─── 3D Force Graph Render ───────────────────────────────────────────────────
@@ -686,7 +747,11 @@ function render3DGraph(nodes, edges) {
         graph3DInstance.width(graph3DContainer.clientWidth);
         graph3DInstance.height(graph3DContainer.clientHeight);
       }
-    }, 40);
+      const targetId = selectedNodeId || lastFoundNodeId;
+      if (targetId) {
+        flyToAndSelectNode(targetId);
+      }
+    }, 50);
   }
 }
 
@@ -892,11 +957,11 @@ function buildNodesAndEdges(notes) {
         face: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
         strokeWidth: 0,
         background: 'rgba(255, 255, 255, 0.95)',
-        borderWidth: 1,
-        borderColor: '#E8E3DA',
-        borderRadius: 6,
-        padding: 5,
         vadjust: 6,
+      },
+      fixed: {
+        x: false,
+        y: false,
       },
       _note: note,
     };
@@ -1019,22 +1084,51 @@ function extractConnections(content) {
   return matches.map(m => m.slice(2, -2).trim()).filter(Boolean);
 }
 
+// ─── Intelligent Fuzzy Search Integration ─────────────────────────────────────
+function getFuzzyMatcher() {
+  if (typeof window !== 'undefined' && window.FuzzySearch) {
+    return window.FuzzySearch;
+  }
+  if (typeof require !== 'undefined') {
+    try { return require('../utils/fuzzySearch'); } catch (_) {}
+  }
+  return null;
+}
+
+function matchNoteQuery(note, query) {
+  const matcher = getFuzzyMatcher();
+  if (matcher && typeof matcher.matchNoteSearch === 'function') {
+    return matcher.matchNoteSearch(note, query);
+  }
+  if (!query) return { matches: true, score: 0 };
+  const q = query.toLowerCase();
+  const t = (note.titulo || '').toLowerCase();
+  const c = (note.content || '').toLowerCase();
+  const tags = (note.tags || []).join(' ').toLowerCase();
+  return { matches: t.includes(q) || c.includes(q) || tags.includes(q), score: 1 };
+}
+
 function filterNotes(notes) {
-  return notes.filter(note => {
-    if (activeFilter !== 'todas' && note.tipo !== activeFilter) {
-      return false;
-    }
-    if (searchQuery) {
-      const q = searchQuery.toLowerCase();
-      const title = (note.titulo || '').toLowerCase();
-      const content = (note.content || '').toLowerCase();
-      const tags = (note.tags || []).join(' ').toLowerCase();
-      if (!title.includes(q) && !content.includes(q) && !tags.includes(q)) {
+  return notes
+    .filter(note => {
+      if (activeFilter !== 'todas' && note.tipo !== activeFilter) {
         return false;
       }
-    }
-    return true;
-  });
+      if (searchQuery) {
+        const res = matchNoteQuery(note, searchQuery);
+        if (!res.matches) return false;
+        note._searchScore = res.score;
+      } else {
+        delete note._searchScore;
+      }
+      return true;
+    })
+    .sort((a, b) => {
+      if (searchQuery) {
+        return (b._searchScore || 0) - (a._searchScore || 0);
+      }
+      return 0;
+    });
 }
 
 function buildTooltip(note) {
@@ -1062,15 +1156,19 @@ function renderSidebar() {
 
 function renderSidebarNotes(filterText = '') {
   const notes = filterNotes(allNotes);
-  const q = (filterText || sidebarSearchInput?.value || '').trim().toLowerCase();
+  const q = (filterText || sidebarSearchInput?.value || '').trim();
 
-  const filtered = notes.filter(n => {
-    if (!q) return true;
-    const t = (n.titulo || '').toLowerCase();
-    const c = (n.content || '').toLowerCase();
-    const tags = (n.tags || []).join(' ').toLowerCase();
-    return t.includes(q) || c.includes(q) || tags.includes(q);
-  });
+  let filtered = notes;
+  if (q) {
+    filtered = filtered
+      .map(n => {
+        const res = matchNoteQuery(n, q);
+        return { note: n, matches: res.matches, score: res.score };
+      })
+      .filter(item => item.matches)
+      .sort((a, b) => (b.score || 0) - (a.score || 0))
+      .map(item => item.note);
+  }
 
   if (badgeSidebarNotes) {
     badgeSidebarNotes.textContent = filtered.length;
@@ -1187,7 +1285,11 @@ function focusCluster(clusterName, noteIds) {
 
 function updateActiveCard(nodeId) {
   document.querySelectorAll('.note-card').forEach(c => {
-    c.classList.toggle('active-card', c.dataset.id === nodeId);
+    const isActive = c.dataset.id === nodeId;
+    c.classList.toggle('active-card', isActive);
+    if (isActive) {
+      c.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
   });
 }
 
@@ -1223,6 +1325,7 @@ function flyToAndSelectNode(nodeId) {
 
 function selectNode(nodeId) {
   selectedNodeId = nodeId;
+  lastFoundNodeId = nodeId;
   const nodeData = nodesDS ? nodesDS.get(nodeId) : null;
   const note = nodeData?._note || allNotes.find(n => n.filename === nodeId);
   if (!note) return;
@@ -1312,6 +1415,7 @@ function selectNode(nodeId) {
 
 function deselectNode() {
   selectedNodeId = null;
+  lastFoundNodeId = null;
   if (focusModeActive) {
     toggleFocusMode();
   }
@@ -1666,18 +1770,54 @@ function escapeHtml(str) {
 
 // ─── Setup events ──────────────────────────────────────────────────────────────
 function setupEvents() {
+  function onSearchCleared() {
+    const targetId = selectedNodeId || lastFoundNodeId;
+    searchQuery = '';
+    searchInput.value = '';
+    searchClear.classList.add('hidden');
+    buildGraph();
+    if (targetId && nodesDS && nodesDS.get(targetId)) {
+      flyToAndSelectNode(targetId);
+    }
+  }
+
   // Search input
   searchInput.addEventListener('input', e => {
-    searchQuery = e.target.value.trim();
-    searchClear.classList.toggle('hidden', !searchQuery);
+    const val = e.target.value.trim();
+    if (!val) {
+      onSearchCleared();
+      return;
+    }
+
+    searchQuery = val;
+    searchClear.classList.remove('hidden');
+
+    const filtered = filterNotes(allNotes);
+    if (selectedNodeId && filtered.some(n => n.filename === selectedNodeId)) {
+      lastFoundNodeId = selectedNodeId;
+    } else if (filtered.length > 0) {
+      lastFoundNodeId = filtered[0].filename;
+      selectedNodeId = lastFoundNodeId;
+    } else {
+      lastFoundNodeId = null;
+      selectedNodeId = null;
+    }
+
     buildGraph();
+    if (lastFoundNodeId && nodesDS && nodesDS.get(lastFoundNodeId)) {
+      flyToAndSelectNode(lastFoundNodeId);
+    }
+  });
+
+  searchInput.addEventListener('keydown', e => {
+    if (e.key === 'Escape') {
+      onSearchCleared();
+      searchInput.blur();
+    }
   });
 
   searchClear.addEventListener('click', () => {
-    searchInput.value = '';
-    searchQuery = '';
-    searchClear.classList.add('hidden');
-    buildGraph();
+    onSearchCleared();
   });
 
   // Filter chips
@@ -1733,6 +1873,14 @@ function setupEvents() {
 
   sidebarSearchInput?.addEventListener('input', e => {
     renderSidebarNotes(e.target.value);
+  });
+
+  sidebarSearchInput?.addEventListener('keydown', e => {
+    if (e.key === 'Escape') {
+      sidebarSearchInput.value = '';
+      renderSidebarNotes('');
+      sidebarSearchInput.blur();
+    }
   });
 
   btnBackToList?.addEventListener('click', () => {

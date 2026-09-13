@@ -730,15 +730,34 @@ function appendNotipResponse(result, save = true) {
       activeNoteContext = {...result,texto:result.texto_reescrito,explicit:true,timestamp:Date.now()};
       updateActiveNoteUI(activeNoteContext);saveChatToStorage();input.focus();
     };
-
     // Listener del botón de Google Calendar
     const btnCal = row.querySelector('.btn-add-calendar');
     if (btnCal) {
-      btnCal.addEventListener('click', async (e) => {
-        e.stopPropagation();
+      const syncCalendarEvent = async () => {
         if (btnCal.dataset.added === 'true') {
           if (btnCal.dataset.link) {
             window.electronAPI.openExternal(btnCal.dataset.link);
+          }
+          return;
+        }
+
+        if (btnCal.dataset.needsReauth === 'true') {
+          btnCal.disabled = true;
+          btnCal.textContent = 'Abriendo Google...';
+          try {
+            const reauthRes = await window.electronAPI.connectGoogleCalendar();
+            if (reauthRes?.error) {
+              btnCal.disabled = false;
+              btnCal.textContent = 'Conectar Google Calendar';
+              showToast(reauthRes.error, true);
+            } else {
+              btnCal.textContent = 'Esperando conexion...';
+              showToast('Autoriza Notip en tu navegador para continuar');
+            }
+          } catch (err) {
+            btnCal.disabled = false;
+            btnCal.textContent = 'Conectar Google Calendar';
+            showToast('Error al abrir la autorizacion de Google', true);
           }
           return;
         }
@@ -761,6 +780,13 @@ function appendNotipResponse(result, save = true) {
             btnCal.classList.add('calendar-success');
             btnCal.title = 'Abrir en Google Calendar web';
             showToast('✓ Evento sincronizado en Google Calendar');
+          } else if (calRes?.needs_reauth) {
+            btnCal.disabled = false;
+            btnCal.dataset.needsReauth = 'true';
+            btnCal.classList.add('calendar-reauth');
+            btnCal.textContent = '🔑 Conectar Google Calendar';
+            btnCal.title = 'Haz clic para vincular tu cuenta de Google';
+            showToast(calRes.error || 'Se requiere conectar Google Calendar', true);
           } else {
             btnCal.disabled = false;
             btnCal.textContent = 'Reintentar Calendar';
@@ -771,6 +797,12 @@ function appendNotipResponse(result, save = true) {
           btnCal.textContent = 'Reintentar Calendar';
           showToast('Error al conectar con Google Calendar', true);
         }
+      };
+
+      btnCal._doSync = syncCalendarEvent;
+      btnCal.addEventListener('click', (e) => {
+        e.stopPropagation();
+        syncCalendarEvent();
       });
     }
 
@@ -938,3 +970,16 @@ window.electronAPI.on('study-organized', async entry => {
   } catch (_) {}
 });
 window.addEventListener('online', () => window.electronAPI.studyOnline());
+window.electronAPI.on('calendar-connected', () => {
+  showToast('✓ Google Calendar conectado con éxito');
+  const waitingButtons = document.querySelectorAll('.btn-add-calendar[data-needs-reauth="true"], .btn-add-calendar.calendar-reauth');
+  waitingButtons.forEach(btn => {
+    btn.dataset.needsReauth = 'false';
+    btn.classList.remove('calendar-reauth');
+    if (typeof btn._doSync === 'function') {
+      btn._doSync();
+    } else {
+      btn.click();
+    }
+  });
+});

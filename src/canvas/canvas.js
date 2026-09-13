@@ -929,22 +929,44 @@ function setupEventListeners() {
   });
 
   // Search filter
+  const getCanvasFuzzyMatcher = () => {
+    return (typeof window !== 'undefined' && window.FuzzySearch)
+      ? window.FuzzySearch
+      : (typeof require !== 'undefined' ? (function() { try { return require('../utils/fuzzySearch'); } catch (_) { return null; } })() : null);
+  };
+
   searchInput.addEventListener('input', () => {
-    const q = searchInput.value.trim().toLowerCase();
-    searchClear.classList.toggle('hidden', !q);
+    const rawQ = searchInput.value.trim();
+    searchClear.classList.toggle('hidden', !rawQ);
+    const matcher = getCanvasFuzzyMatcher();
 
     document.querySelectorAll('.canvas-card').forEach(card => {
       const filename = card.dataset.filename;
       const note = allNotes.find(n => n.filename === filename);
       if (!note) return;
 
-      const title = (note.titulo || '').toLowerCase();
-      const content = (note.content || '').toLowerCase();
-      const tags = (note.tags || []).join(' ').toLowerCase();
-
-      const matches = !q || title.includes(q) || content.includes(q) || tags.includes(q);
+      let matches = true;
+      if (rawQ) {
+        if (matcher && typeof matcher.matchNoteSearch === 'function') {
+          matches = matcher.matchNoteSearch(note, rawQ).matches;
+        } else {
+          const q = rawQ.toLowerCase();
+          const title = (note.titulo || '').toLowerCase();
+          const content = (note.content || '').toLowerCase();
+          const tags = (note.tags || []).join(' ').toLowerCase();
+          matches = title.includes(q) || content.includes(q) || tags.includes(q);
+        }
+      }
       card.classList.toggle('is-filtered-out', !matches);
     });
+  });
+
+  searchInput.addEventListener('keydown', e => {
+    if (e.key === 'Escape') {
+      searchInput.value = '';
+      searchInput.dispatchEvent(new Event('input'));
+      searchInput.blur();
+    }
   });
 
   searchClear.addEventListener('click', () => {

@@ -195,6 +195,10 @@ function getTaskCategory(task) {
 }
 
 function filterTasks(tasks, filter, query) {
+  const matcher = (typeof window !== 'undefined' && window.FuzzySearch)
+    ? window.FuzzySearch
+    : (typeof require !== 'undefined' ? (function() { try { return require('../utils/fuzzySearch'); } catch (_) { return null; } })() : null);
+
   return tasks.filter(t => {
     // Filter by category
     if (filter !== 'todas') {
@@ -203,9 +207,19 @@ function filterTasks(tasks, filter, query) {
     }
     // Search
     if (query) {
-      const q = query.toLowerCase();
-      const haystack = `${t.titulo} ${t.curso || ''} ${t.descripcion || ''} ${t.fecha_entrega || ''}`.toLowerCase();
-      if (!haystack.includes(q)) return false;
+      if (matcher && typeof matcher.matchNoteSearch === 'function') {
+        const res = matcher.matchNoteSearch({
+          titulo: t.titulo,
+          descripcion: `${t.curso || ''} ${t.descripcion || ''} ${t.fecha_entrega || ''}`,
+          tags: [t.estado, t.prioridad, t.curso].filter(Boolean)
+        }, query);
+        if (!res.matches) return false;
+        t._searchScore = res.score;
+      } else {
+        const q = query.toLowerCase();
+        const haystack = `${t.titulo} ${t.curso || ''} ${t.descripcion || ''} ${t.fecha_entrega || ''}`.toLowerCase();
+        if (!haystack.includes(q)) return false;
+      }
     }
     return true;
   });

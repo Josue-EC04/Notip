@@ -179,6 +179,7 @@ async function handleOAuthCallback(rawUrl) {
       const access_token = params.get('access_token');
       const refresh_token = params.get('refresh_token');
       const provider_token = params.get('provider_token');
+      const provider_refresh_token = params.get('provider_refresh_token');
 
       if (access_token) {
         const { data, error } = await sb.auth.setSession({
@@ -195,12 +196,19 @@ async function handleOAuthCallback(rawUrl) {
         const session = data?.session;
         if (session) {
           const googleToken = provider_token || session.provider_token;
+          const googleRefreshToken = provider_refresh_token || session.provider_refresh_token;
           currentProviderToken = googleToken || null;
           storeSession(session);
           if (googleToken) {
             store.set('notip-provider-token', googleToken);
           }
+          if (googleRefreshToken) {
+            store.set('notip-provider-refresh-token', googleRefreshToken);
+          }
           console.log('[auth] Sesión iniciada con éxito para:', session.user?.email);
+          if (captureWindow && !captureWindow.isDestroyed()) {
+            captureWindow.webContents.send('calendar-connected', { success: true });
+          }
           onLoginSuccess();
           return;
         }
@@ -232,12 +240,20 @@ async function handleOAuthCallback(rawUrl) {
 
       const session = data?.session;
       if (session) {
-        currentProviderToken = session.provider_token || null;
+        const googleToken = session.provider_token;
+        const googleRefreshToken = session.provider_refresh_token;
+        currentProviderToken = googleToken || null;
         storeSession(session);
-        if (session.provider_token) {
-          store.set('notip-provider-token', session.provider_token);
+        if (googleToken) {
+          store.set('notip-provider-token', googleToken);
+        }
+        if (googleRefreshToken) {
+          store.set('notip-provider-refresh-token', googleRefreshToken);
         }
         console.log('[auth] Sesión iniciada para:', session.user?.email);
+        if (captureWindow && !captureWindow.isDestroyed()) {
+          captureWindow.webContents.send('calendar-connected', { success: true });
+        }
         onLoginSuccess();
         return;
       }
@@ -989,6 +1005,37 @@ ipcMain.handle('auth-login', async () => {
   }
 });
 
+/** Inicia la vinculación o renovación específica de Google Calendar */
+ipcMain.handle('connect-google-calendar', async () => {
+  try {
+    const { getSupabaseClient } = require('./src/supabase/client');
+    const sb = getSupabaseClient();
+    if (!sb) return { error: 'Supabase no configurado.' };
+
+    const { data, error } = await sb.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo:    'notip://auth-callback',
+        scopes:        'openid email profile https://www.googleapis.com/auth/calendar.events',
+        queryParams:   { access_type: 'offline', prompt: 'consent' },
+        skipBrowserRedirect: false,
+      },
+    });
+
+    if (error) return { error: error.message };
+
+    if (data?.url) {
+      shell.openExternal(data.url);
+      return { success: true, pending: true };
+    }
+
+    return { error: 'No se generó la URL de autorización de Google' };
+  } catch (err) {
+    console.error('[connect-google-calendar] Error:', err);
+    return { error: err.message };
+  }
+});
+
 /** Cierra la sesión y muestra la pantalla de login */
 async function performLogout() {
   try {
@@ -1122,7 +1169,10 @@ ipcMain.handle('add-calendar-event', async (_e, params) => {
   try {
     const providerToken = currentProviderToken || store.get('notip-provider-token');
     if (!providerToken) {
-      return { error: 'No hay token de Google disponible. Cierra sesión y vuelve a entrar con Google.', needs_reauth: true };
+      return { 
+        error: 'No hay conexión activa con Google Calendar. Haz clic en "Conectar Google Calendar".', 
+        needs_reauth: true 
+      };
     }
 
     const google = getGoogleApi();
@@ -1201,6 +1251,25 @@ ipcMain.handle('add-calendar-event', async (_e, params) => {
     return { success: true, eventId: res.data.id, htmlLink: res.data.htmlLink };
   } catch (err) {
     console.error('[calendar] Error creando evento:', err);
+    const msg = (err.message || '').toLowerCase();
+    const status = err.status || err.code;
+    const isAuthError = status === 401 ||
+      status === 403 ||
+      msg.includes('authentication credential') ||
+      msg.includes('invalid_token') ||
+      msg.includes('invalid_grant') ||
+      msg.includes('login required') ||
+      msg.includes('unauthorized');
+
+    if (isAuthError) {
+      currentProviderToken = null;
+      store.delete('notip-provider-token');
+      return {
+        error: 'Tu autorización de Google Calendar ha caducado. Haz clic en "Conectar Google Calendar" para renovarla.',
+        needs_reauth: true,
+      };
+    }
+
     return { error: err.message };
   }
 });

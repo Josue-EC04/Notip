@@ -1120,6 +1120,19 @@ html, body {
   cursor: pointer;
 }
 
+.btn-add-calendar.calendar-reauth {
+  background: #FEF3C7;
+  border-color: #FCD34D;
+  color: #B45309;
+  font-weight: 600;
+}
+
+.btn-add-calendar.calendar-reauth:hover {
+  background: #FDE68A;
+  border-color: #F59E0B;
+  color: #92400E;
+}
+
 .chat-stream-footer {
   display: flex;
   align-items: center;

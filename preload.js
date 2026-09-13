@@ -78,6 +78,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getCredits:    ()                            => ipcRenderer.invoke('get-credits'),
 
   // ─── Google Calendar v2 ───────────────────────────────────────────────────────
+  /** Inicia vinculación o renovación de Google Calendar */
+  connectGoogleCalendar: ()                    => ipcRenderer.invoke('connect-google-calendar'),
   /** Crea un evento en el Google Calendar del usuario */
   addCalendarEvent: (params)                   => ipcRenderer.invoke('add-calendar-event', params),
   /** Abre un link externo en el navegador predeterminado */
@@ -114,6 +116,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
       'auth-changed',
       'auth-error',
       'credits-updated',
+      'calendar-connected',
     ];
     if (allowed.includes(channel) && typeof callback === 'function') {
       const subscription = (_e, ...args) => callback(...args);
