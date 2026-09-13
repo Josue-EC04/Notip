@@ -83,6 +83,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   /** Abre un link externo en el navegador predeterminado */
   openExternal:     (url)                      => ipcRenderer.invoke('open-external', url),
   externalQuestion: (text, provider = null)    => ipcRenderer.invoke('external-question', text, provider),
+  studyImproveQuestion: text => ipcRenderer.invoke('study-improve-question', text),
+  telegramState: () => ipcRenderer.invoke('telegram-state'),
+  telegramConfigure: token => ipcRenderer.invoke('telegram-configure', token),
+  telegramSettings: settings => ipcRenderer.invoke('telegram-settings', settings),
+  telegramDisconnect: () => ipcRenderer.invoke('telegram-disconnect'),
+  telegramTest: () => ipcRenderer.invoke('telegram-test'),
 
   // ─── Settings & Custom API Key ───────────────────────────────────────────────
   getSettings:       ()                            => ipcRenderer.invoke('get-settings'),

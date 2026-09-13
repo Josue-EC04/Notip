@@ -7,6 +7,11 @@ module.exports=function registerStudy({app,ipcMain,BrowserWindow,store,vaultPath
   const db=require('../db/database');
   const notes=require('../notes/notesManager');
   let service=null, timer=null, suspended=true;
+  let ai=null,improving=false;
+  const {TelegramService}=require('../telegram/telegramService');
+  const telegram=new TelegramService({store,db,getOwner:()=>suspended?null:require('../supabase/client').getStoredUser()?.id,onTasksChanged:id=>{
+    onTasksChanged();try{const t=db.getTasks().find(t=>t.id===id);if(t)require('../sync/syncManager').uploadTask(t).catch(()=>{});}catch(_){}
+  }});
   const getKey=()=>store.get('anthropic_custom_key')||process.env.ANTHROPIC_API_KEY||'';
   const broadcast=(channel,data)=>BrowserWindow.getAllWindows().forEach(w=>{if(!w.isDestroyed()) w.webContents.send(channel,data);});
   function show(tab='inbox') { onOpen(tab); }
@@ -14,6 +19,17 @@ module.exports=function registerStudy({app,ipcMain,BrowserWindow,store,vaultPath
   const safe=fn=>async(_e,...args)=>{try {if(!service) throw Error('El almacenamiento local todavía no está listo.');return {success:true,data:await fn(...args)};}catch(err){return {success:false,error:err.message};}};
   ipcMain.on('open-study',(_e,tab)=>show(['inbox','classes','focus'].includes(tab)?tab:'inbox'));
   ipcMain.handle('study-state',safe(()=>service.snapshot()));
+  ipcMain.handle('study-improve-question',safe(async text=>{
+    if(suspended)throw Error('Inicia sesión primero.');
+    if(typeof text!=='string'||!text.trim()||text.length>24000)throw Error('Escribe una consulta de hasta 24000 caracteres.');
+    if(improving)throw Error('Ya se está mejorando una consulta.');
+    improving=true;try{return await ai.improveQuestion(text);}finally{improving=false;}
+  }));
+  ipcMain.handle('telegram-state',safe(()=>telegram.state()));
+  ipcMain.handle('telegram-configure',safe(token=>telegram.configure(token)));
+  ipcMain.handle('telegram-settings',safe(settings=>telegram.settings(settings)));
+  ipcMain.handle('telegram-disconnect',safe(()=>telegram.disconnect()));
+  ipcMain.handle('telegram-test',safe(()=>telegram.digest(true)));
   ipcMain.handle('study-capture',safe((text,type,context)=>{const e=service.capture(text,type,service.state.activeSessionId?null:context);onNotesChanged();setImmediate(wake);return e;}));
   ipcMain.handle('study-edit',safe((id,text)=>{const e=service.edit(id,text);wake();onNotesChanged();return e;}));
   ipcMain.handle('study-delete',safe(id=>{service.remove(id);onNotesChanged();}));
@@ -40,7 +56,7 @@ module.exports=function registerStudy({app,ipcMain,BrowserWindow,store,vaultPath
   ipcMain.on('study-online',()=>wake(true));
   return {
     init(){
-      const ai=aiAdapter||createStudyAI(getKey);
+      ai=aiAdapter||createStudyAI(getKey);
       service=new StudyService({dataPath,vaultPath,db,...ai,getNotes:()=>notes.getAllNotes(vaultPath),canProcess:()=>Boolean(getKey()||aiAdapter),onChange:s=>broadcast('study-updated',s),onSaved:e=>{
         onTasksChanged();onNotesChanged();broadcast('study-organized',e);
         // Existing cloud integration remains optional; offline data is always local first.
@@ -64,7 +80,7 @@ module.exports=function registerStudy({app,ipcMain,BrowserWindow,store,vaultPath
       service.change();service.mirror(updated);wake();return {success:true,filePath:path.join(vaultPath,filename)};
     },
     deletePendingNote(filename){const e=service?.state.entries.find(e=>e.filename===filename&&e.status!=='done');if(!e)return false;service.remove(e.id);return true;},
-    resume(){suspended=false;setTimeout(()=>wake(),500).unref();},
-    stop(){suspended=true;if(service){service.generation++;}},
+    resume(){suspended=false;telegram.start();setTimeout(()=>wake(),500).unref();},
+    stop(){suspended=true;telegram.stop();if(service){service.generation++;}},
   };
 };

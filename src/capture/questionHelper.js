@@ -6,6 +6,22 @@
   const names = { claude: 'Claude', gemini: 'Gemini', chatgpt: 'ChatGPT' };
   let busy = false;
   let lastSource = null;
+  let revision=0;
+  prompt.addEventListener('input',()=>revision++);
+  get('question-improve').onclick=async()=>{
+    if(busy||!prompt.value.trim())return;
+    busy=true;const version=revision,original=prompt.value;
+    get('question-improve').disabled=true;
+    get('question-status').textContent='Claude está redactando tu consulta…';
+    try{
+      const r=await window.electronAPI.studyImproveQuestion(original);
+      if(version!==revision||prompt.value!==original)return;
+      if(!r.success)throw Error(r.error);
+      prompt.value=r.data;revision++;
+      get('question-status').textContent='Consulta mejorada con Claude. Revísala antes de copiar.';
+    }catch(e){if(version===revision)get('question-status').textContent=(e.message||'No se pudo conectar con Claude.')+' Tu consulta original se conserva.';}
+    finally{busy=false;get('question-improve').disabled=false;}
+  };
   try {
     const saved = localStorage.getItem('notip_question_provider');
     if (Object.hasOwn(names, saved)) provider.value = saved;
@@ -17,9 +33,10 @@
   };
   updateLabel();
   window.addEventListener('resolve-question', event => {
-    const {text, title, course} = event.detail;
+    const {text, title, course, mode} = event.detail;
     const source = JSON.stringify(event.detail);
     if (source !== lastSource) {
+      revision++;
       prompt.value = [
         'Actúa como un tutor paciente. Ayúdame a entender la duda de este apunte.',
         course ? `Estoy estudiando: ${course}.` : '',
@@ -27,8 +44,10 @@
         '\nMi apunte o duda:', text,
         '\nExplícalo paso a paso, con un ejemplo sencillo. Si falta información, pregúntame antes de asumir. Señala si mi apunte contiene errores y termina con una pregunta corta para comprobar que lo entendí.',
       ].filter(Boolean).join('\n').slice(0,24000);
+      if(mode==='review')prompt.value=`Ayúdame a repasar esta clase como tutor. Usa los apuntes como contexto, señala posibles errores y hazme una pregunta a la vez. Espera mi respuesta, dame una explicación breve y adapta la siguiente pregunta. No inventes lo que vimos en clase.\nClase: ${course||title}\n\n${text}`.slice(0,24000);
       lastSource = source;
     }
+    get('question-title').textContent=mode==='review'?'Repasar esta clase':'Resolver esta duda';
     get('question-status').textContent = '';
     if (!dialog.open) dialog.showModal();
     prompt.focus();

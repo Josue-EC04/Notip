@@ -302,9 +302,10 @@
   <dialog id="question-dialog" aria-labelledby="question-title">
     <form id="question-form">
       <div class="question-heading"><h2 id="question-title">Resolver esta duda</h2><button id="question-close" type="button" aria-label="Cerrar consulta">✕</button></div>
-      <p>Revisa la consulta. La preparó Notip con una plantilla local, sin usar la API.</p>
+      <p>Empieza con una plantilla local. Opcionalmente, Claude puede mejorarla usando tu API y su saldo.</p>
       <label for="question-prompt">Consulta que vas a copiar</label>
       <textarea id="question-prompt" rows="9" maxlength="24000" required spellcheck="true"></textarea>
+      <button type="button" id="question-improve">Mejorar consulta con IA</button>
       <label for="question-provider">Abrir en</label>
       <select id="question-provider"><option value="claude">Claude</option><option value="gemini">Gemini</option><option value="chatgpt">ChatGPT</option></select>
       <p class="question-hint">Se copiará el texto y se abrirá el sitio. Pega con Ctrl+V, inicia un chat nuevo si hace falta y envíalo tú. Se aplican los límites de tu cuenta.</p>
@@ -316,5 +317,6 @@
   <script src="capture.js"></script>
   <script src="chatTools.js"></script>
   <script src="chatExperience.js"></script>
+  <script src="telegramSettings.js"></script>
 </body>
 </html>

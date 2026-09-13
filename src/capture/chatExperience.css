@@ -59,5 +59,18 @@
 #question-dialog #question-open { background: var(--primary); color: white; border-color: var(--primary); }
 #question-dialog #question-status { color: var(--primary); }
 #question-dialog button:disabled { opacity: .5; cursor: wait; }
+#telegram-settings { border-top: 1px solid var(--border); padding-top: 14px; }
+#modal-settings .modal-card { max-height: calc(100vh - 32px); }
+#modal-settings .modal-header { flex-shrink: 0; }
+#modal-settings .modal-body { min-height: 0; overflow-y: auto; }
+#telegram-settings { display: block; }
+#telegram-settings ol { padding-left: 18px; }
+#telegram-settings summary { cursor: pointer; padding: 7px 0; }
+#telegram-settings label { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12px; margin: 10px 0; color: var(--text-dim); }
+#telegram-settings input[type="time"] { font: inherit; background: white; color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 5px; }
+#telegram-settings .settings-input-group { margin: 10px 0; }
+#telegram-settings .telegram-hours { display: flex; flex-wrap: wrap; gap: 12px; }
+#telegram-settings .settings-actions-row { flex-wrap: wrap; }
+#telegram-disconnect { margin-top: 12px; }
 #question-dialog textarea { height: min(180px, 28vh); min-height: 100px; }
 #question-dialog .question-actions { position: sticky; bottom: -16px; background: var(--bg-deep); padding: 10px 0 4px; border-top: 1px solid var(--border); }

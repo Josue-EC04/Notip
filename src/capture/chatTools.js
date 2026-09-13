@@ -62,6 +62,16 @@ function renderClasses(){
   if(!sessions.length){list.innerHTML='<div class="empty"><h3>Tu próxima clase empieza aquí.</h3><p>Al terminar tendrás tus apuntes, dudas y entregas reunidos.</p></div>';return;}
   for(const s of sessions){const entries=state.entries.filter(e=>e.sessionId===s.id);const card=document.createElement('article');card.className='card';card.innerHTML=`<div class="card-top"><h2>${esc(s.name)}</h2><span class="badge ${esc(s.status)}">${s.status==='done'?'Resumen listo':esc(labels[s.status])}</span></div><p class="date">${esc(date(s.created))} · ${entries.length} capturas</p>${s.error?`<p class="error-text">${esc(s.error)}</p>`:''}`;
     if(s.report){const report=document.createElement('div');report.className='report';report.innerHTML=`<p class="preserve">${esc(s.report.resumen)}</p>`;for(const [key,title] of [['conceptos','Conceptos importantes'],['dudas','Dudas que anotaste'],['preguntas','Preguntas para repasar']]){report.innerHTML+=`<details><summary>${title}</summary>${s.report[key]?.length?`<ul>${s.report[key].map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`:'<p>No se registraron.</p>'}</details>`;}card.append(report);}else card.innerHTML+='<p class="footnote">Tus apuntes ya están guardados. El resumen espera a que se organicen todas las capturas.</p>';
+    if(s.report){
+      const ask=(text,title,mode)=>window.dispatchEvent(new CustomEvent('resolve-question',{detail:{text,title,course:s.name,mode}}));
+      const doubts=card.querySelectorAll('.report details:nth-of-type(2) li');
+      doubts.forEach((li,i)=>{const doubt=s.report.dudas[i];li.append(document.createElement('br'),button('Resolver esta duda',()=>{
+        const words=String(doubt).toLowerCase().match(/[\p{L}\d]{4,}/gu)||[];
+        const related=entries.map(e=>({e,score:words.filter(w=>e.text.toLowerCase().includes(w)).length})).filter(x=>x.score>0).sort((a,b)=>b.score-a.score).slice(0,3).map(x=>x.e.text.slice(0,3500));
+        ask(`Duda: ${doubt}\nResumen de clase: ${String(s.report.resumen||'').slice(0,4000)}\nApuntes relacionados:\n${related.join('\n')}`,doubt,'doubt');
+      },'resolve-question'));});
+      card.append(button('Repasar esta clase',()=>ask(`Resumen: ${s.report.resumen||''}\nConceptos: ${(s.report.conceptos||[]).join(', ')}\nDudas: ${(s.report.dudas||[]).join('; ')}\nApuntes:\n${entries.map(e=>e.text).join('\n').slice(0,16000)}`.slice(0,22000),s.name,'review'),'resolve-question'));
+    }
     const tasks=entries.filter(e=>e.result?.tipo==='tarea');const details=document.createElement('details');details.innerHTML=`<summary>Ver ${entries.length} apuntes y ${tasks.length} tareas</summary>${entries.map(e=>`<p class="preserve"><strong>${esc(e.result?.tipo||'Pendiente')}</strong> · ${esc(e.text)}</p>`).join('')}`;card.append(details);if(tasks.length)card.append(button('Abrir tareas',()=>api.openBoard()));list.append(card);
   }
 }
