@@ -38,6 +38,7 @@
 .receipt-open, .continue-note { border: 0; background: transparent; color: var(--primary); cursor: pointer; font: inherit; font-size: 11px; padding: 4px 0; }
 .capture-receipt .receipt-open { margin-left: 10px; }
 .result-status { font-size: 11px; color: var(--emerald); margin: 5px 0; }
+.notip-comment { margin: 8px 0 4px; font: inherit; font-size: 12px; line-height: 1.55; color: var(--text-dim); overflow-wrap: anywhere; }
 .chat-card-result { width: 100%; }
 .card-result-top strong { font-size: 13px; font-weight: 600; overflow-wrap: anywhere; }
 #chat-tools #duration-options { margin: 10px 0; }

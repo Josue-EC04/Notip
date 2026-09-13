@@ -659,7 +659,7 @@ function appendNotipResponse(result, save = true) {
     row.className = 'chat-row-notip';
     if(result.captureId) row.dataset.captureId = result.captureId;
 
-    const feedbackText = result.mensaje_feedback || 'Nota procesada y organizada en tu bóveda.';
+    const feedbackText = typeof result.mensaje_feedback === 'string' ? result.mensaje_feedback.trim() : '';
 
     let metaTagsHtml = '';
     if (result.curso) {
@@ -704,6 +704,12 @@ function appendNotipResponse(result, save = true) {
       ? '<div class="capture-receipt"><span class="capture-status"></span><button class="receipt-open">Ver pendientes</button></div>'
       : `<div class="chat-card-result"><div class="card-result-top"><span class="chat-card-badge ${tipo}">${badgeLabel}</span><strong>${escapeHtml(result.titulo || result.titulo_corto || 'Nota guardada')}</strong></div><p class="result-status">${result.es_modificacion_de_anterior ? 'Cambios guardados' : badgeLabel + ' creada'}</p>${metaTagsHtml ? '<div class="card-result-pills">' + metaTagsHtml + '</div>' : ''}${calendarBoxHtml}<div class="receipt-actions"><button class="receipt-open">${tipo==='tarea'?'Ver tarea':'Ver nota'}</button>${result.filePath?'<button class="continue-note">Continuar esta nota</button>':''}</div></div>`;
     if(result.pending) row.querySelector('.capture-status').textContent = captureStatus(result.captureId);
+    if (!result.pending && tipo !== 'sin_clasificar' && feedbackText) {
+      const comment = document.createElement('p');
+      comment.className = 'notip-comment';
+      comment.textContent = feedbackText.length > 240 ? feedbackText.slice(0, 237).trimEnd() + '…' : feedbackText;
+      row.querySelector('.receipt-actions').before(comment);
+    }
     row.querySelector('.receipt-open').onclick = () => result.pending ? window.electronAPI.openStudy('inbox') : tipo==='tarea' ? window.electronAPI.openBoard() : window.electronAPI.openCanvas();
     const continuation = row.querySelector('.continue-note');
     if(continuation) continuation.onclick = () => {

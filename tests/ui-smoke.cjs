@@ -13,7 +13,7 @@ async function run(){
  const syncPath=require.resolve('../src/sync/syncManager');require.cache[syncPath]={id:syncPath,filename:syncPath,loaded:true,exports:{uploadNote:async()=>null,uploadTask:async()=>null}};
  const broadcast=()=>BrowserWindow.getAllWindows().forEach(w=>w.webContents.send('board-tasks-updated'));
  const store={get:()=>'',set:()=>{}};
- study=require('../src/study/registerStudy')({app,ipcMain,BrowserWindow,store,vaultPath:path.join(temp,'vault'),dataPath:path.join(temp,'data'),preload:path.join(root,'preload.js'),icon:path.join(root,'src/assets/icon.png'),onLocalLogin(){},onOpen:tab=>win.webContents.send("study-tab",tab),onTasksChanged:broadcast,onNotesChanged(){},aiAdapter:{classify:async(text,type,context,notes,meta)=>({tipo:type||(/entregar/i.test(text)?'tarea':'nota'),es_modificacion_de_anterior:!!context,titulo_corto:text.split('\n')[0].slice(0,70),texto_reescrito:text,curso:meta.course||null,tags:['redes','subnetting'],prioridad:'media'}),summarize:async()=>({resumen:'Revisamos máscaras de subred y división de redes.',conceptos:['Subnetting','Máscara /27'],dudas:['¿Cuántos equipos admite /27?'],preguntas:['¿Para qué sirve una máscara de red?']})}});
+ study=require('../src/study/registerStudy')({app,ipcMain,BrowserWindow,store,vaultPath:path.join(temp,'vault'),dataPath:path.join(temp,'data'),preload:path.join(root,'preload.js'),icon:path.join(root,'src/assets/icon.png'),onLocalLogin(){},onOpen:tab=>win.webContents.send("study-tab",tab),onTasksChanged:broadcast,onNotesChanged(){},aiAdapter:{classify:async(text,type,context,notes,meta)=>({tipo:type||(/entregar/i.test(text)?'tarea':'nota'),mensaje_feedback:"Empieza por resolver un ejercicio de ejemplo.",es_modificacion_de_anterior:!!context,titulo_corto:text.split('\n')[0].slice(0,70),texto_reescrito:text,curso:meta.course||null,tags:['redes','subnetting'],prioridad:'media'}),summarize:async()=>({resumen:'Revisamos máscaras de subred y división de redes.',conceptos:['Subnetting','Máscara /27'],dudas:['¿Cuántos equipos admite /27?'],preguntas:['¿Para qué sirve una máscara de red?']})}});
  study.init();
  ipcMain.handle('get-tasks',()=>db.getTasks());ipcMain.handle('update-task-state',(_e,id,state)=>{const r=db.updateTaskState(id,state);broadcast();return r;});
  ipcMain.handle('get-notes-count',()=>require('../src/notes/notesManager').getAllNotes(path.join(temp,'vault')).length);
@@ -43,6 +43,7 @@ async function run(){
  await capture.webContents.executeJavaScript("document.getElementById('note-input').value='Entregar práctica de redes';document.getElementById('note-input').dispatchEvent(new Event('input'));document.getElementById('btn-save').click()");
  await until(win,"document.querySelectorAll('#inbox-list .card').length===2");
  await until(capture,"document.querySelector('.capture-status')?.textContent.includes('IA pausada')");
+ assert.equal(await capture.webContents.executeJavaScript("document.querySelectorAll('.notip-comment').length"),0);
  await screenshot(capture,'02-captura.png');
  await win.webContents.executeJavaScript("document.getElementById('btn-study-class').click();document.getElementById('class-name').value='Redes · Subnetting';document.getElementById('class-form').requestSubmit()");
  await until(win,"document.getElementById('class-ribbon-open').textContent.includes('Redes')");
@@ -55,6 +56,7 @@ async function run(){
  await until(win,"document.getElementById('class-list').textContent.includes('Resumen listo')");
  await win.webContents.executeJavaScript("document.getElementById('btn-study-class').click()");await screenshot(win,'03-clase.png');
  assert.equal(db.getTasks().length,2);
+ assert.equal(await win.webContents.executeJavaScript("document.querySelector('.notip-comment')?.textContent"),'Empieza por resolver un ejercicio de ejemplo.');
  await win.webContents.executeJavaScript("document.getElementById('btn-study-focus').click()");await until(win,"document.querySelector('#effort-form')!==null");
  await win.webContents.executeJavaScript("document.getElementById('effort-minutes').value='15';document.getElementById('effort-step').value='Resolver el primer ejercicio /27';document.getElementById('effort-form').requestSubmit()");
  await until(win,"document.querySelector('.step').textContent.includes('Resolver el primer ejercicio')");
