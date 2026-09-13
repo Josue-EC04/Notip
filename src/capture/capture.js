@@ -57,6 +57,7 @@ let isSaving          = false;
 let forcedType        = null;
 let toastTimer        = null;
 let activeNoteContext = null; // Contexto de la nota activa para permitir continuar el chat
+let latestStudyState = {entries:[],sessions:[]};
 let chatHistory       = []; // Historial de mensajes de la sesión activa
 
 // ── Elements: Result Card Actions ─────────────────────────────────────────────
@@ -156,19 +157,21 @@ async function loadRecentActivity() {
 function updateActiveNoteUI(context) {
   if (context && (context.titulo || context.titulo_corto)) {
     const tit = context.titulo_corto || context.titulo;
+    document.getElementById('capture-mode').textContent = 'Editando: ' + tit;
     if (activeNoteTitle) activeNoteTitle.textContent = tit;
     activeNoteBanner?.classList.remove('hidden');
     btnActionNewNote?.classList.remove('hidden');
-    btnSaveText.textContent = 'Enviar al chat';
+    btnSaveText.textContent = 'Guardar cambios';
     input.placeholder = `Modificando "${tit}"... (o pulsa "+ Nueva nota" / Ctrl+N)`;
     hintLabel.textContent = 'Modificando nota previa';
     if (btnOpenBoardAction && context.tipo === 'tarea') {
       btnOpenBoardAction.classList.remove('hidden');
     }
   } else {
+    document.getElementById('capture-mode').textContent = 'Nueva captura';
     activeNoteBanner?.classList.add('hidden');
     btnActionNewNote?.classList.add('hidden');
-    btnSaveText.textContent = 'Guardar';
+    btnSaveText.textContent = 'Guardar captura';
     input.placeholder = 'Escribe una tarea, idea o apunte rápido...';
     hintLabel.textContent = 'Clasificación automática activa';
     if (btnOpenBoardAction) {
@@ -185,14 +188,15 @@ function restoreActiveChat() {
       const now = Date.now();
       const isExpired = !parsed.timestamp || (now - parsed.timestamp > 90 * 1000); // 90 segundos de inactividad
 
-      if (parsed.activeNoteContext && !isExpired) {
-        activeNoteContext = parsed.activeNoteContext;
+      if (Array.isArray(parsed.messages) && !isExpired) {
+        activeNoteContext = parsed.activeNoteContext?.explicit ? parsed.activeNoteContext : null;
         sectionZeroState?.classList.add('hidden');
         sectionChatStream?.classList.remove('hidden');
 
         if (chatStreamMessages) chatStreamMessages.innerHTML = '';
 
         if (Array.isArray(parsed.messages) && parsed.messages.length > 0) {
+          chatHistory = parsed.messages;
           parsed.messages.forEach(m => {
             if (m.isUser) appendUserMessage(m.text, false);
             else appendNotipResponse(m.result, false);
@@ -269,14 +273,12 @@ input.addEventListener('input', () => {
   btnSave.disabled = len === 0 || isSaving;
   
   // Guardar borrador en progreso
-  if (!activeNoteContext) {
-    localStorage.setItem('notip_input_draft', input.value);
-  }
+  localStorage.setItem('notip_input_draft', input.value);
 
   if (activeNoteContext) {
-    btnSaveText.textContent = 'Enviar al chat';
+    btnSaveText.textContent = 'Guardar cambios';
   } else {
-    btnSaveText.textContent = 'Guardar';
+    btnSaveText.textContent = 'Guardar captura';
   }
 });
 
@@ -503,12 +505,15 @@ async function handleSave() {
     document.getElementById('capture-dynamic-area')?.classList.remove('hidden');
     sectionZeroState?.classList.add('hidden'); sectionChatStream?.classList.remove('hidden');
     appendUserMessage(text);
-    appendNotipResponse({tipo:'sin_clasificar',titulo:'Captura guardada',mensaje_feedback:'Guardada en tu equipo. Notip está organizando con Claude…'});
+    appendNotipResponse({tipo:'sin_clasificar',titulo:'Captura guardada',captureId:entry.id,pending:true});
+    document.getElementById('welcome-card').hidden = true;
+    localStorage.setItem('notip_welcome_seen','1');
     if (input.value.trim() === text) input.value = '';
     localStorage.removeItem('notip_input_draft');
     activeNoteContext = null; updateActiveNoteUI(null);
+    saveChatToStorage();
     charCounter.textContent = input.value.length + ' / 1000';
-    showToast('Guardado en este equipo'); refreshCounter();
+    input.dispatchEvent(new Event('input')); refreshCounter();
   } catch (err) { showToast(err.message, true); }
   finally { isSaving = false; setSavingState(false); input.focus(); }
 }
@@ -566,7 +571,7 @@ function setSavingState(active, label = 'Guardar') {
     if (btnSaveSpinner) btnSaveSpinner.classList.remove('hidden');
     btnSave.style.opacity = '0.8';
   } else {
-    btnSaveText.textContent = activeNoteContext ? 'Enviar al chat' : 'Guardar';
+    btnSaveText.textContent = activeNoteContext ? 'Guardar cambios' : 'Guardar captura';
     if (btnSaveIcon) btnSaveIcon.classList.remove('hidden');
     if (btnSaveSpinner) btnSaveSpinner.classList.add('hidden');
     btnSave.style.opacity = '';
@@ -652,6 +657,7 @@ function appendNotipResponse(result, save = true) {
 
     const row = document.createElement('div');
     row.className = 'chat-row-notip';
+    if(result.captureId) row.dataset.captureId = result.captureId;
 
     const feedbackText = result.mensaje_feedback || 'Nota procesada y organizada en tu bóveda.';
 
@@ -694,34 +700,17 @@ function appendNotipResponse(result, save = true) {
       `;
     }
 
-    row.innerHTML = `
-      <div class="claude-response-hub">
-        <div class="claude-hub-header">
-          <div class="notip-avatar-badge" title="Notip AI"></div>
-          <div class="claude-hub-title-wrap">
-            <span class="claude-hub-name">Notip AI</span>
-            <span class="claude-hub-sub">Respuesta & Análisis</span>
-          </div>
-        </div>
-
-        <div class="claude-tip-card">
-          <div class="tip-card-badge">
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
-            <span>Tip de Notip</span>
-          </div>
-          <div class="tip-card-content">${escapeHtml(feedbackText)}</div>
-        </div>
-
-        <div class="chat-card-result">
-          <div class="card-result-top">
-            <span class="chat-card-badge ${tipo}">${badgeLabel}</span>
-            <span class="chat-card-title">${escapeHtml(result.titulo ?? result.texto_reescrito ?? 'Sin título')}</span>
-          </div>
-          ${metaTagsHtml ? `<div class="card-result-pills">${metaTagsHtml}</div>` : ''}
-          ${calendarBoxHtml}
-        </div>
-      </div>
-    `;
+    row.innerHTML = result.pending
+      ? '<div class="capture-receipt"><span class="capture-status"></span><button class="receipt-open">Ver pendientes</button></div>'
+      : `<div class="chat-card-result"><div class="card-result-top"><span class="chat-card-badge ${tipo}">${badgeLabel}</span><strong>${escapeHtml(result.titulo || result.titulo_corto || 'Nota guardada')}</strong></div><p class="result-status">${result.es_modificacion_de_anterior ? 'Cambios guardados' : badgeLabel + ' creada'}</p>${metaTagsHtml ? '<div class="card-result-pills">' + metaTagsHtml + '</div>' : ''}${calendarBoxHtml}<div class="receipt-actions"><button class="receipt-open">${tipo==='tarea'?'Ver tarea':'Ver nota'}</button>${result.filePath?'<button class="continue-note">Continuar esta nota</button>':''}</div></div>`;
+    if(result.pending) row.querySelector('.capture-status').textContent = captureStatus(result.captureId);
+    row.querySelector('.receipt-open').onclick = () => result.pending ? window.electronAPI.openStudy('inbox') : tipo==='tarea' ? window.electronAPI.openBoard() : window.electronAPI.openCanvas();
+    const continuation = row.querySelector('.continue-note');
+    if(continuation) continuation.onclick = () => {
+      if(latestStudyState.activeSessionId){showToast('Termina la clase antes de modificar una nota anterior.',true);return;}
+      activeNoteContext = {...result,texto:result.texto_reescrito,explicit:true,timestamp:Date.now()};
+      updateActiveNoteUI(activeNoteContext);saveChatToStorage();input.focus();
+    };
 
     // Listener del botón de Google Calendar
     const btnCal = row.querySelector('.btn-add-calendar');
@@ -766,11 +755,14 @@ function appendNotipResponse(result, save = true) {
       });
     }
 
-    chatStreamMessages.appendChild(row);
+    const previous = result.captureId && [...chatStreamMessages.querySelectorAll('[data-capture-id]')].find(el=>el.dataset.captureId===result.captureId);
+    if(previous) previous.replaceWith(row); else chatStreamMessages.appendChild(row);
     chatStreamMessages.scrollTop = chatStreamMessages.scrollHeight;
 
     if (save) {
-      chatHistory.push({ isUser: false, result });
+      const index = result.captureId ? chatHistory.findIndex(m=>m.result?.captureId===result.captureId) : -1;
+      if(index >= 0) chatHistory[index] = {isUser:false,result};
+      else chatHistory.push({ isUser: false, result });
       saveChatToStorage();
     }
   } catch (err) {
@@ -883,32 +875,36 @@ document.getElementById('btn-study-inbox').onclick = () => window.electronAPI.op
 document.getElementById('btn-study-focus').onclick = () => window.electronAPI.openStudy('focus');
 document.getElementById('btn-study-class').onclick = () => window.electronAPI.openStudy('classes');
 function updateStudyStrip(state) {
+  latestStudyState = state;
+  for (const message of [...chatHistory]) {
+    if (!message.result?.pending) continue;
+    const entry = state.entries.find(e=>e.id===message.result.captureId);
+    if (entry?.status === 'done') appendNotipResponse({...entry.result,titulo:entry.result.titulo_corto,taskId:entry.taskId,filePath:entry.filePath,captureId:entry.id});
+  }
+  document.querySelectorAll('[data-capture-id] .capture-status').forEach(el=>el.textContent=captureStatus(el.closest('[data-capture-id]').dataset.captureId));
   document.getElementById('study-pending').textContent = state.entries.filter(e => e.status !== 'done').length;
   const session = state.sessions.find(s => s.id === state.activeSessionId);
   document.getElementById('btn-study-class').textContent = session ? 'En clase: ' + session.name.slice(0,20) : 'Iniciar clase';
   document.getElementById('study-local-status').textContent = state.paused ? 'IA pausada' : state.processing ? 'Organizando…' : 'Guardado local';
   if (session) { activeNoteContext = null; updateActiveNoteUI(null); }
 }
+function captureStatus(id) {
+  const entry = latestStudyState.entries.find(e=>e.id===id);
+  if (entry?.status === 'done') return 'Guardado y organizado';
+  if (latestStudyState.paused) return 'Guardado · IA pausada';
+  if (!navigator.onLine) return 'Guardado · esperando conexión';
+  if (!latestStudyState.configured) return 'Guardado · configura la IA en Ajustes';
+  if (entry?.status === 'processing') return 'Organizando…';
+  if (entry?.status === 'error') return 'Guardado · no se pudo organizar. Puedes reintentar.';
+  return 'Guardado · pendiente de organizar';
+}
 window.electronAPI.studyState().then(r => { if(r.success) updateStudyStrip(r.data); }).catch(()=>{});
 window.electronAPI.on('study-updated', updateStudyStrip);
 window.electronAPI.on('study-organized', async entry => {
-  if (entry.id !== lastCaptureId) return;
+  if (!chatHistory.some(m=>m.result?.captureId===entry.id)) return;
   const r = entry.result;
-  const result = {...r,titulo:r.titulo_corto,taskId:entry.taskId,filePath:entry.filePath};
+  const result = {...r,titulo:r.titulo_corto,taskId:entry.taskId,filePath:entry.filePath,captureId:entry.id};
   appendNotipResponse(result);
-  if (!entry.sessionId) {
-    activeNoteContext = {...result,texto:r.texto_reescrito,timestamp:Date.now()};
-    updateActiveNoteUI(activeNoteContext); saveChatToStorage();
-  }
-  showToast(entry.source === 'manual' ? 'Organizada manualmente' : 'Captura organizada con IA');
-  const chatTools = document.getElementById('chat-tools');
-  if (chatTools && !chatTools.hidden) {
-    const msg = document.getElementById('message');
-    if (msg) {
-      msg.textContent = '✓ Tu nota fue organizada por la IA. Pulsa "Volver al chat" para verla.';
-      msg.hidden = false;
-    }
-  }
   try {
     const response = await window.electronAPI.studyRelated(r.texto_reescrito,entry.filename);
     if (!response.success || !response.data.length) return;

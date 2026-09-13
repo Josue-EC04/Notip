@@ -13,7 +13,7 @@ async function run(){
  const syncPath=require.resolve('../src/sync/syncManager');require.cache[syncPath]={id:syncPath,filename:syncPath,loaded:true,exports:{uploadNote:async()=>null,uploadTask:async()=>null}};
  const broadcast=()=>BrowserWindow.getAllWindows().forEach(w=>w.webContents.send('board-tasks-updated'));
  const store={get:()=>'',set:()=>{}};
- study=require('../src/study/registerStudy')({app,ipcMain,BrowserWindow,store,vaultPath:path.join(temp,'vault'),dataPath:path.join(temp,'data'),preload:path.join(root,'preload.js'),icon:path.join(root,'src/assets/icon.png'),onLocalLogin(){},onOpen:tab=>win.webContents.send("study-tab",tab),onTasksChanged:broadcast,onNotesChanged(){},aiAdapter:{classify:async(text,type,context,notes,meta)=>({tipo:type||(/entregar/i.test(text)?'tarea':'nota'),titulo_corto:text.split('\n')[0].slice(0,70),texto_reescrito:text,curso:meta.course||null,tags:['redes','subnetting'],prioridad:'media'}),summarize:async()=>({resumen:'Revisamos máscaras de subred y división de redes.',conceptos:['Subnetting','Máscara /27'],dudas:['¿Cuántos equipos admite /27?'],preguntas:['¿Para qué sirve una máscara de red?']})}});
+ study=require('../src/study/registerStudy')({app,ipcMain,BrowserWindow,store,vaultPath:path.join(temp,'vault'),dataPath:path.join(temp,'data'),preload:path.join(root,'preload.js'),icon:path.join(root,'src/assets/icon.png'),onLocalLogin(){},onOpen:tab=>win.webContents.send("study-tab",tab),onTasksChanged:broadcast,onNotesChanged(){},aiAdapter:{classify:async(text,type,context,notes,meta)=>({tipo:type||(/entregar/i.test(text)?'tarea':'nota'),es_modificacion_de_anterior:!!context,titulo_corto:text.split('\n')[0].slice(0,70),texto_reescrito:text,curso:meta.course||null,tags:['redes','subnetting'],prioridad:'media'}),summarize:async()=>({resumen:'Revisamos máscaras de subred y división de redes.',conceptos:['Subnetting','Máscara /27'],dudas:['¿Cuántos equipos admite /27?'],preguntas:['¿Para qué sirve una máscara de red?']})}});
  study.init();
  ipcMain.handle('get-tasks',()=>db.getTasks());ipcMain.handle('update-task-state',(_e,id,state)=>{const r=db.updateTaskState(id,state);broadcast();return r;});
  ipcMain.handle('get-notes-count',()=>require('../src/notes/notesManager').getAllNotes(path.join(temp,'vault')).length);
@@ -23,6 +23,11 @@ async function run(){
  win.webContents.on('console-message',(_event,level,message)=>{if(level>=3&&!message.includes('ERR_INTERNET')&&!message.includes('ERR_NAME'))failures.push(message);});
  await win.loadFile(path.join(root,'src/capture/capture.html'));
  await until(win,"document.querySelector('#inbox-list .empty') !== null");
+ assert.equal(await win.webContents.executeJavaScript("!document.getElementById('welcome-card').hidden"),true);
+ await win.webContents.executeJavaScript("document.getElementById('dismiss-welcome').click();document.getElementById('btn-more').click()");
+ assert.equal(await win.webContents.executeJavaScript("!document.getElementById('more-menu').hidden && document.getElementById('modal-settings').contains(document.getElementById('btn-logout'))"),true);
+ assert.equal(await win.webContents.executeJavaScript("document.getElementById('btn-notes').getBoundingClientRect().right <= document.getElementById('btn-board').getBoundingClientRect().left"),true);
+ await win.webContents.executeJavaScript("document.getElementById('btn-more').click()");
  await win.webContents.executeJavaScript("document.getElementById('btn-study-inbox').click();document.getElementById('pause-ai').click()");
  await until(win,"document.getElementById('pause-ai').textContent.includes('Reanudar')");
  await win.webContents.executeJavaScript("document.getElementById('note-input').value='Duda sobre subnetting y máscara /27';document.getElementById('note-input').dispatchEvent(new Event('input'));document.getElementById('btn-save').click()");
@@ -37,10 +42,10 @@ async function run(){
  await capture.loadFile(path.join(root,'src/capture/capture.html'));
  await capture.webContents.executeJavaScript("document.getElementById('note-input').value='Entregar práctica de redes';document.getElementById('note-input').dispatchEvent(new Event('input'));document.getElementById('btn-save').click()");
  await until(win,"document.querySelectorAll('#inbox-list .card').length===2");
- await until(capture,"document.getElementById('chat-stream-messages').textContent.includes('Captura guardada')");
+ await until(capture,"document.querySelector('.capture-status')?.textContent.includes('IA pausada')");
  await screenshot(capture,'02-captura.png');
  await win.webContents.executeJavaScript("document.getElementById('btn-study-class').click();document.getElementById('class-name').value='Redes · Subnetting';document.getElementById('class-form').requestSubmit()");
- await until(win,"document.getElementById('btn-study-class').textContent.includes('Redes')");
+ await until(win,"document.getElementById('class-ribbon-open').textContent.includes('Redes')");
  for(const text of ['No entiendo cómo calcular equipos con máscara /27','Entregar ejercicios de subnetting']) {
   await win.webContents.executeJavaScript(`document.getElementById('note-input').value=${JSON.stringify(text)};document.getElementById('note-input').dispatchEvent(new Event('input'));document.getElementById('btn-save').click()`);await delay(100);
  }
@@ -63,6 +68,25 @@ async function run(){
  win.setSize(440,560);await delay(200);
  assert.equal(await win.webContents.executeJavaScript("document.getElementById('chat-tools').scrollWidth<=document.getElementById('chat-tools').clientWidth"),true);
  await screenshot(win,'05-compacto.png');
+ await win.webContents.executeJavaScript("document.getElementById('close-chat-tools').click()");
+ await until(win,"!document.getElementById('focus-ribbon').hidden");
+ assert.equal(await win.webContents.executeJavaScript("document.getElementById('focus-ribbon').textContent.includes('restantes')"),true);
+ const before=require('../src/notes/notesManager').getAllNotes(path.join(temp,'vault')).length;
+ for(const text of ['Nueva idea de laboratorio','Otra idea independiente']) {
+  await win.webContents.executeJavaScript(`document.getElementById('note-input').value=${JSON.stringify(text)};document.getElementById('note-input').dispatchEvent(new Event('input'));document.getElementById('btn-save').click()`);
+  await until(win,"document.querySelectorAll('.capture-status').length===0 && document.getElementById('btn-save').disabled");
+  assert.equal(await win.webContents.executeJavaScript("document.getElementById('capture-mode').textContent"),'Nueva captura');
+ }
+ assert.equal(require('../src/notes/notesManager').getAllNotes(path.join(temp,'vault')).length,before+2);
+ await win.webContents.executeJavaScript("Array.from(document.querySelectorAll('.continue-note')).at(-1).click()");
+ assert.equal(await win.webContents.executeJavaScript("document.getElementById('capture-mode').textContent.startsWith('Editando:') && document.getElementById('btn-save-text').textContent==='Guardar cambios'"),true);
+ await win.webContents.executeJavaScript("window.electronAPI.studyPause(true)");
+ await win.webContents.executeJavaScript("document.getElementById('note-input').value='Completar esta idea';document.getElementById('note-input').dispatchEvent(new Event('input'));document.getElementById('btn-save').click()");
+ await until(win,"document.querySelectorAll('.capture-status').length===1 && document.getElementById('btn-save').disabled");
+ assert.equal(await win.webContents.executeJavaScript("JSON.parse(localStorage.getItem('notip_active_chat')).activeNoteContext"),null);
+ await win.webContents.executeJavaScript("window.electronAPI.studyPause(false)");
+ await until(win,"document.querySelectorAll('.capture-status').length===0 && document.getElementById('btn-save').disabled");
+ assert.equal(require('../src/notes/notesManager').getAllNotes(path.join(temp,'vault')).length,before+2);
  if(failures.length)throw Error(failures.join('\n'));
  console.log('UI PASS: offline capture, edit, compact capture IPC, class report, task effort, focus timer, related link, compact layout.');
  study.stop();for(const w of BrowserWindow.getAllWindows())w.destroy();db.closeDatabase();

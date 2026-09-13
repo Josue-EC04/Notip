@@ -1,0 +1,47 @@
+/* A quieter layout using the original capture palette and font. */
+[hidden] { display: none !important; }
+#panel-header { overflow: visible; flex-shrink: 0; position: relative; z-index: 10; }
+#header-actions { gap: 5px; }
+#panel-header #header-actions .nav-text { width: auto; height: 30px; padding: 5px 9px; font: inherit; font-size: 12px; white-space: nowrap; color: var(--text-dim); }
+.brand-badge { display: none; }
+#more-menu { position: absolute; right: 12px; top: 48px; width: 210px; padding: 6px; background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--rs); box-shadow: 0 10px 24px #1c19171c; }
+#panel-header #more-menu button { display: block; width: 100%; height: auto; padding: 10px; border: 0; border-radius: 6px; text-align: left; color: var(--text); background: transparent; font: inherit; cursor: pointer; }
+#more-menu button:hover { background: var(--primary-soft); }
+#more-menu #notes-counter { display: block; padding: 7px 10px; margin: 0; font-size: 11px; background: transparent; }
+#capture-mode { padding: 4px 16px 0; font-size: 11px; font-weight: 600; color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex-shrink: 0; }
+#active-note-banner { padding: 3px 16px; background: transparent; border: 0; margin: 0; }
+#active-note-banner .active-note-info { display: none; }
+#input-wrapper, .tools-open #input-wrapper { min-height: 0; max-height: none; padding-top: 5px; }
+#note-input, .tools-open #note-input { min-height: 44px !important; max-height: 108px; height: auto; font-size: 13px; }
+#note-input::placeholder { font-style: normal; }
+#type-hints { padding-top: 4px; padding-bottom: 2px; font-size: 11px; color: var(--muted); }
+#capture-kind { border: 0; background: transparent; color: var(--text-dim); font: inherit; cursor: pointer; padding: 4px; }
+#actions { padding-top: 3px; padding-bottom: 9px; }
+#btn-cancel, #btn-action-new-note, .chat-stream-footer { display: none !important; }
+#btn-save { flex: 1; }
+.study-strip { padding-top: 6px; padding-bottom: 4px; }
+.study-strip button { padding: 5px 8px; font-size: 11px; }
+#study-local-status { display: none; }
+#class-ribbon, #focus-ribbon { margin: 3px 14px; padding: 6px 8px; border: 1px solid var(--border); border-radius: 7px; background: var(--primary-soft); color: var(--primary); flex-shrink: 0; font: inherit; font-size: 11px; }
+#class-ribbon { display: flex; align-items: center; gap: 7px; }
+#class-ribbon button { border: 0; color: inherit; background: transparent; cursor: pointer; font: inherit; }
+#class-ribbon-open { flex: 1; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#class-ribbon-end { font-weight: 600 !important; }
+#focus-ribbon { text-align: left; cursor: pointer; }
+#capture-dynamic-area { overflow-y: auto; }
+#welcome-card { padding: 14px; margin: 7px 0 12px; background: var(--primary-soft); border: 1px solid var(--border); border-radius: var(--rs); flex-shrink: 0; }
+#welcome-card p { line-height: 1.6; font-size: 12px; margin: 6px 0 10px; color: var(--text-dim); }
+#welcome-card button { font: inherit; font-size: 11px; border: 1px solid var(--border); border-radius: 6px; background: white; color: var(--primary); padding: 6px 8px; cursor: pointer; }
+#welcome-card #dismiss-welcome { margin-top: 8px; border: 0; background: transparent; padding-left: 0; }
+.capture-receipt { padding: 9px 12px; font-size: 11px; color: var(--muted); border-left: 2px solid var(--border); }
+.receipt-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+.receipt-open, .continue-note { border: 0; background: transparent; color: var(--primary); cursor: pointer; font: inherit; font-size: 11px; padding: 4px 0; }
+.capture-receipt .receipt-open { margin-left: 10px; }
+.result-status { font-size: 11px; color: var(--emerald); margin: 5px 0; }
+.chat-card-result { width: 100%; }
+.card-result-top strong { font-size: 13px; font-weight: 600; overflow-wrap: anywhere; }
+#chat-tools #duration-options { margin: 10px 0; }
+#chat-tools .report details { border-top: 1px solid var(--border-subtle); padding-top: 6px; }
+#classes-view:has(#class-list .card) { display: flex; flex-direction: column; }
+#classes-view:has(#class-list .card) .session-start { order: 2; }
+#capture-dynamic-area:has(#welcome-card:not([hidden])) #section-zero-state { display: none; }
